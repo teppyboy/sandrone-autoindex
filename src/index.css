@@ -108,6 +108,14 @@ body:has(#autoindex-root) > html {
   display: none !important;
 }
 
+/* Horizontal-scrollable breadcrumb row on mobile — hides the scrollbar */
+.breadcrumb-scroll {
+  scrollbar-width: none;
+}
+.breadcrumb-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    COLOUR PALETTES
    Applied via .palette-NAME on <html>. Each palette overrides the primary
@@ -223,7 +231,8 @@ body:has(#autoindex-root) > html {
   background-image: url('/_autoindex/bg/140384272_p0.jpg');
   background-size: cover;
   background-position: center;
-  filter: brightness(var(--bg-brightness, 0.70));
+  filter: brightness(var(--bg-brightness, 0.70)) blur(var(--bg-blur, 0px));
+  transform: scale(1.03);
   pointer-events: none;
 }
 

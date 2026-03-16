@@ -4,8 +4,6 @@ import {
   ChevronRight,
   FolderOpen,
   House,
-  LayoutGrid,
-  LayoutList,
   Search,
   Server,
   Settings,
@@ -14,10 +12,10 @@ import {
   X,
 } from 'lucide-react'
 
+import { FileIcon } from '@/components/autoindex/FileIcon'
+import { MobileSearchSheet } from '@/components/autoindex/MobileSearchSheet'
+import { SettingsSheet } from '@/components/autoindex/SettingsSheet'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,26 +23,33 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
-
-import { FileIcon } from '@/components/autoindex/FileIcon'
-import { SettingsSheet } from '@/components/autoindex/SettingsSheet'
+import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  type Entry,
   type BreadcrumbSegment,
+  type Entry,
   parseAutoindex,
   parseMtime,
-  pathSegments,
   parentHref,
+  pathSegments,
 } from '@/lib/parser'
-import type { SortKey, SortDir, ViewMode, Theme, Palette } from '@/lib/types'
+import type { Palette, SortDir, SortKey, Theme, ViewMode } from '@/lib/types'
+import { useIsMobile } from '@/lib/useIsMobile'
+import { cn } from '@/lib/utils'
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'name', label: 'Name' },
+  { value: 'mtime', label: 'Modified' },
+  { value: 'size', label: 'Size' },
+  { value: 'type', label: 'Type' },
+]
 
 function formatMtime(mtime: string): string {
-  const d = parseMtime(mtime)
-  if (!d) return mtime
-  return d.toLocaleString(undefined, {
+  const date = parseMtime(mtime)
+  if (!date) return mtime
+
+  return date.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -61,30 +66,48 @@ function formatSizeBytes(bytes: number): string {
 }
 
 function sortEntries(entries: Entry[], key: SortKey, dir: SortDir): Entry[] {
-  const sorted = [...entries].sort((a, b) => {
-    // Directories always float to the top
+  return [...entries].sort((a, b) => {
     if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
-
     if (key === 'type') return a.name.localeCompare(b.name)
 
-    let cmp = 0
+    let comparison = 0
+
     if (key === 'name') {
-      cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      comparison = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
     } else if (key === 'mtime') {
-      const da = parseMtime(a.mtime)?.getTime() ?? 0
-      const db = parseMtime(b.mtime)?.getTime() ?? 0
-      cmp = da - db
+      const aTime = parseMtime(a.mtime)?.getTime() ?? 0
+      const bTime = parseMtime(b.mtime)?.getTime() ?? 0
+      comparison = aTime - bTime
     } else if (key === 'size') {
-      cmp = (a.rawSize ?? -1) - (b.rawSize ?? -1)
+      comparison = (a.rawSize ?? -1) - (b.rawSize ?? -1)
     }
 
-    return dir === 'asc' ? cmp : -cmp
+    return dir === 'asc' ? comparison : -comparison
   })
-
-  return sorted
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+function getSortLabel(sortKey: SortKey): string {
+  return SORT_OPTIONS.find(option => option.value === sortKey)?.label ?? 'Name'
+}
+
+function readStoredNumber(key: string, fallback: number): number {
+  try {
+    const stored = localStorage.getItem(key)
+    const parsed = stored == null ? NaN : Number(stored)
+    return Number.isFinite(parsed) ? parsed : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function readStoredViewMode(): ViewMode {
+  try {
+    const stored = localStorage.getItem('sandrone-view')
+    return stored === 'grid' ? 'grid' : 'list'
+  } catch {
+    return 'list'
+  }
+}
 
 interface SortButtonProps {
   label: string
@@ -97,12 +120,15 @@ interface SortButtonProps {
 
 function SortButton({ label, sortKey, current, dir, onSort, className }: SortButtonProps) {
   const active = current === sortKey
+
   return (
     <button
       onClick={() => onSort(sortKey)}
-      className={`flex items-center gap-1 text-xs font-medium select-none hover:text-foreground transition-colors ${
-        active ? 'text-foreground' : 'text-muted-foreground'
-      } ${className ?? ''}`}
+      className={cn(
+        'flex items-center gap-1 text-xs font-medium select-none hover:text-foreground transition-colors',
+        active ? 'text-foreground' : 'text-muted-foreground',
+        className,
+      )}
     >
       {label}
       {active ? (
@@ -116,38 +142,66 @@ function SortButton({ label, sortKey, current, dir, onSort, className }: SortBut
 
 interface FileRowProps {
   entry: Entry
+  isMobile: boolean
   showSize?: boolean
 }
 
-function FileRow({ entry, showSize = true }: FileRowProps) {
+function FileRow({ entry, isMobile, showSize = true }: FileRowProps) {
+  const isDirectory = entry.type === 'directory'
+  const sizeLabel = isDirectory
+    ? null
+    : entry.rawSize != null
+    ? formatSizeBytes(entry.rawSize)
+    : (entry.size ?? null)
+
   return (
     <a
       href={entry.href}
-      className="group flex items-center gap-3 px-4 py-2.5 rounded-md hover:bg-muted/60 transition-colors text-sm no-underline"
+      className={cn(
+        'group flex items-center gap-3 px-4 rounded-md hover:bg-muted/60 transition-colors text-sm no-underline',
+        isMobile ? 'py-3' : 'py-2.5',
+      )}
     >
       <FileIcon
         name={entry.name}
-        isDir={entry.type === 'directory'}
-        className="size-4.5 shrink-0"
+        isDir={isDirectory}
+        className={cn('shrink-0', isMobile ? 'size-5' : 'size-4.5')}
         strokeWidth={1.5}
       />
-      <span className="flex-1 truncate text-foreground group-hover:text-primary font-normal">
-        {entry.name}
-        {entry.type === 'directory' && (
-          <span className="text-muted-foreground ml-0.5">/</span>
+
+      <span className="flex-1 min-w-0">
+        <span className="block truncate text-foreground group-hover:text-primary font-normal">
+          {entry.name}
+          {isDirectory && <span className="text-muted-foreground ml-0.5">/</span>}
+        </span>
+
+        {isMobile && (
+          <span className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[11px] text-muted-foreground">
+            {sizeLabel && <span className="shrink-0">{sizeLabel}</span>}
+            {sizeLabel && <span className="shrink-0">·</span>}
+            <span className="truncate">{formatMtime(entry.mtime)}</span>
+          </span>
         )}
       </span>
-      <span className="hidden sm:block w-44 text-right text-muted-foreground text-xs shrink-0">
-        {formatMtime(entry.mtime)}
-      </span>
-      {showSize && (
-        <span className="hidden md:block w-20 text-right text-muted-foreground text-xs shrink-0">
-          {entry.type === 'directory'
+
+      {!isMobile && (
+        <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
+          {formatMtime(entry.mtime)}
+        </span>
+      )}
+
+      {!isMobile && showSize && (
+        <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
+          {isDirectory
             ? '—'
             : entry.rawSize != null
             ? formatSizeBytes(entry.rawSize)
             : (entry.size ?? '—')}
         </span>
+      )}
+
+      {isMobile && isDirectory && (
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
       )}
     </a>
   )
@@ -155,27 +209,36 @@ function FileRow({ entry, showSize = true }: FileRowProps) {
 
 interface FileCardProps {
   entry: Entry
+  isMobile: boolean
 }
 
-function FileCard({ entry }: FileCardProps) {
+function FileCard({ entry, isMobile }: FileCardProps) {
   return (
     <a
       href={entry.href}
-      className="group flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center no-underline"
+      className={cn(
+        'group flex flex-col items-center gap-2 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center no-underline',
+        isMobile ? 'p-3' : 'p-4',
+      )}
     >
       <FileIcon
         name={entry.name}
         isDir={entry.type === 'directory'}
-        className="size-8 shrink-0"
+        className={cn('shrink-0', isMobile ? 'size-7' : 'size-8')}
         strokeWidth={1.5}
       />
-      <span className="text-xs text-foreground font-normal w-full truncate group-hover:text-primary leading-snug">
-        {entry.name}
-        {entry.type === 'directory' && (
-          <span className="text-muted-foreground">/</span>
+
+      <span
+        className={cn(
+          'w-full text-xs text-foreground font-normal leading-snug group-hover:text-primary',
+          isMobile ? 'line-clamp-2' : 'truncate',
         )}
+      >
+        {entry.name}
+        {entry.type === 'directory' && <span className="text-muted-foreground">/</span>}
       </span>
-      <span className="text-[10px] text-muted-foreground">
+
+      <span className="mt-auto text-[10px] text-muted-foreground">
         {entry.type === 'directory'
           ? 'Folder'
           : entry.rawSize != null
@@ -188,26 +251,29 @@ function FileCard({ entry }: FileCardProps) {
 
 interface BreadcrumbNavProps {
   segments: BreadcrumbSegment[]
+  className?: string
 }
 
-function BreadcrumbNav({ segments }: BreadcrumbNavProps) {
+function BreadcrumbNav({ segments, className }: BreadcrumbNavProps) {
   return (
-    <nav aria-label="Directory path" className="flex items-center gap-1 flex-wrap">
-      {segments.map((seg, i) => {
-        const isLast = i === segments.length - 1
+    <nav aria-label="Directory path" className={cn('flex items-center gap-1', className)}>
+      {segments.map((segment, index) => {
+        const isLast = index === segments.length - 1
+
         return (
-          <span key={seg.href} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight className="size-3.5 text-muted-foreground/50 shrink-0" />}
+          <span key={segment.href} className="flex shrink-0 items-center gap-1">
+            {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />}
+
             {isLast ? (
               <span className="text-sm font-medium text-foreground">
-                {i === 0 ? <House className="size-3.5" /> : seg.label}
+                {index === 0 ? <House className="size-3.5" /> : segment.label}
               </span>
             ) : (
               <a
-                href={seg.href}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline"
+                href={segment.href}
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground no-underline"
               >
-                {i === 0 ? <House className="size-3.5" /> : seg.label}
+                {index === 0 ? <House className="size-3.5" /> : segment.label}
               </a>
             )}
           </span>
@@ -217,9 +283,9 @@ function BreadcrumbNav({ segments }: BreadcrumbNavProps) {
   )
 }
 
-// ─── Main App ────────────────────────────────────────────────────────────────
-
 export default function App() {
+  const isMobile = useIsMobile()
+
   const [entries, setEntries] = useState<Entry[]>([])
   const [path, setPath] = useState('/')
   const [loaded, setLoaded] = useState(false)
@@ -227,7 +293,7 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
-  const [view, setView] = useState<ViewMode>('list')
+  const [view, setView] = useState<ViewMode>(readStoredViewMode)
 
   const [theme, setTheme] = useState<Theme>(() => {
     try {
@@ -245,18 +311,11 @@ export default function App() {
     }
   })
 
-  const [bgBrightness, setBgBrightness] = useState<number>(() => {
-    try {
-      const stored = localStorage.getItem('sandrone-bg-brightness')
-      return stored ? Number(stored) : 70
-    } catch {
-      return 70
-    }
-  })
-
+  const [bgBrightness, setBgBrightness] = useState<number>(() => readStoredNumber('sandrone-bg-brightness', 70))
+  const [bgBlur, setBgBlur] = useState<number>(() => readStoredNumber('sandrone-bg-blur', 0))
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // Parse the native nginx autoindex markup on first render
   useEffect(() => {
     const parsed = parseAutoindex(document)
     if (parsed) {
@@ -266,7 +325,6 @@ export default function App() {
     setLoaded(true)
   }, [])
 
-  // Sync theme class to <html> and persist to localStorage
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     try {
@@ -274,28 +332,27 @@ export default function App() {
     } catch {}
   }, [theme])
 
-  // Sync palette class to <html> and persist to localStorage
   useEffect(() => {
-    const el = document.documentElement
-    // Remove any existing palette- classes
-    const toRemove = [...el.classList].filter(cls => cls.startsWith('palette-'))
-    toRemove.forEach(cls => el.classList.remove(cls))
+    const element = document.documentElement
+    const paletteClasses = [...element.classList].filter(className => className.startsWith('palette-'))
+
+    paletteClasses.forEach(className => element.classList.remove(className))
+
     if (palette !== 'neutral') {
-      el.classList.add(`palette-${palette}`)
+      element.classList.add(`palette-${palette}`)
     }
+
     try {
       localStorage.setItem('sandrone-palette', palette)
     } catch {}
   }, [palette])
 
-  // Auto-switch to dark when Sandrone palette is selected
   useEffect(() => {
     if (palette === 'sandrone' && theme !== 'dark') {
       setTheme('dark')
     }
-  }, [palette])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [palette, theme])
 
-  // Sync bg brightness CSS var to <html> and persist
   useEffect(() => {
     document.documentElement.style.setProperty('--bg-brightness', (bgBrightness / 100).toFixed(2))
     try {
@@ -303,190 +360,244 @@ export default function App() {
     } catch {}
   }, [bgBrightness])
 
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg-blur', `${bgBlur}px`)
+    try {
+      localStorage.setItem('sandrone-bg-blur', String(bgBlur))
+    } catch {}
+  }, [bgBlur])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sandrone-view', view)
+    } catch {}
+  }, [view])
+
+  useEffect(() => {
+    if (!isMobile && mobileSearchOpen) {
+      setMobileSearchOpen(false)
+    }
+  }, [isMobile, mobileSearchOpen])
+
   const segments = useMemo(() => pathSegments(path), [path])
 
-  // Hide the internal /_autoindex/ assets folder at the root listing only
   const visibleEntries = useMemo(() => {
     if (path !== '/') return entries
-    return entries.filter(e => !(e.type === 'directory' && e.name === '_autoindex'))
+    return entries.filter(entry => !(entry.type === 'directory' && entry.name === '_autoindex'))
   }, [entries, path])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return q ? visibleEntries.filter(e => e.name.toLowerCase().includes(q)) : visibleEntries
-  }, [visibleEntries, search])
+    const query = search.trim().toLowerCase()
+    return query ? visibleEntries.filter(entry => entry.name.toLowerCase().includes(query)) : visibleEntries
+  }, [search, visibleEntries])
 
-  const sorted = useMemo(() => sortEntries(filtered, sortKey, sortDir), [filtered, sortKey, sortDir])
+  const sorted = useMemo(() => sortEntries(filtered, sortKey, sortDir), [filtered, sortDir, sortKey])
 
-  const dirCount = useMemo(() => visibleEntries.filter(e => e.type === 'directory').length, [visibleEntries])
-  const fileCount = useMemo(() => visibleEntries.filter(e => e.type === 'file').length, [visibleEntries])
+  const dirCount = useMemo(() => visibleEntries.filter(entry => entry.type === 'directory').length, [visibleEntries])
+  const fileCount = useMemo(() => visibleEntries.filter(entry => entry.type === 'file').length, [visibleEntries])
   const totalBytes = useMemo(
-    () => visibleEntries.reduce((acc, e) => acc + (e.rawSize ?? 0), 0),
-    [visibleEntries]
+    () => visibleEntries.reduce((sum, entry) => sum + (entry.rawSize ?? 0), 0),
+    [visibleEntries],
   )
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
-      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortKey(key)
-      setSortDir('asc')
+      setSortDir(currentDir => (currentDir === 'asc' ? 'desc' : 'asc'))
+      return
     }
+
+    setSortKey(key)
+    setSortDir('asc')
   }
 
   const isRoot = path === '/' || path === ''
   const upHref = isRoot ? null : parentHref(path)
+  const sortLabel = getSortLabel(sortKey)
+  const hasActiveSearch = search.trim().length > 0
+
+  const renderSearchField = (className?: string) => (
+    <div className={cn('relative', className)}>
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={search}
+        onChange={event => setSearch(event.target.value)}
+        placeholder="Filter files…"
+        className="h-8 border-input/60 bg-muted/40 pl-8 text-sm focus-visible:bg-background"
+      />
+
+      {search && (
+        <button
+          onClick={() => setSearch('')}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          aria-label="Clear search"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </div>
+  )
+
+  const settingsButton = (
+    <Tooltip>
+      <TooltipTrigger
+        className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'size-8 shrink-0')}
+        onClick={() => setSettingsOpen(true)}
+        aria-label="Open settings"
+      >
+        <Settings className="size-4" />
+      </TooltipTrigger>
+      <TooltipContent>Settings</TooltipContent>
+    </Tooltip>
+  )
+
+  const creditContent = (
+    <>
+      Powered by{' '}
+      <a
+        href="https://github.com/teppyboy/sandrone-autoindex"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-muted-foreground/70 transition-colors hover:text-foreground no-underline"
+      >
+        Sandrone-AutoIndex
+      </a>
+    </>
+  )
 
   if (!loaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <span className="text-sm text-muted-foreground animate-pulse">Loading…</span>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <span className="animate-pulse text-sm text-muted-foreground">Loading…</span>
       </div>
     )
   }
 
   return (
     <TooltipProvider>
-      <div className="autoindex-app min-h-screen bg-background text-foreground flex flex-col">
+      <div className="autoindex-app flex min-h-screen flex-col bg-background text-foreground">
+        <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
+          {isMobile ? (
+            <>
+              <div className="mx-auto flex h-12 max-w-7xl items-center gap-3 px-4">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <Server className="size-4.5 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+                  <span className="truncate text-sm font-semibold tracking-tight text-foreground">Sandrone</span>
+                </div>
 
-        {/* ── Top bar ── */}
-        <header className="sticky top-0 z-10 bg-background/90 backdrop-blur border-b border-border">
-          <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-4">
+                <Tooltip>
+                  <TooltipTrigger
+                    className={cn(
+                      buttonVariants({ variant: 'ghost', size: 'icon' }),
+                      'size-8 shrink-0',
+                      hasActiveSearch && 'bg-muted text-foreground',
+                    )}
+                    onClick={() => setMobileSearchOpen(true)}
+                    aria-label="Open search"
+                  >
+                    <Search className="size-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>Search</TooltipContent>
+                </Tooltip>
 
-            {/* Branding */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              <Server className="size-4.5 text-muted-foreground" strokeWidth={1.5} />
-              <span className="text-sm font-semibold tracking-tight text-foreground hidden sm:block">
-                Sandrone
-              </span>
+                {settingsButton}
+              </div>
+
+              <div className="breadcrumb-scroll mx-auto max-w-7xl overflow-x-auto pl-5 pr-4 pt-2 pb-3">
+                <BreadcrumbNav segments={segments} className="min-w-max flex-nowrap" />
+              </div>
+            </>
+          ) : (
+            <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
+              <div className="flex shrink-0 items-center gap-2">
+                <Server className="size-4.5 text-muted-foreground" strokeWidth={1.5} />
+                <span className="text-sm font-semibold tracking-tight text-foreground">Sandrone</span>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <BreadcrumbNav segments={segments} className="flex-wrap" />
+              </div>
+
+              {renderSearchField('w-64 shrink-0')}
+              {settingsButton}
             </div>
+          )}
+        </header>
 
-            {/* Breadcrumb */}
-            <div className="flex-1 min-w-0 hidden md:block">
-              <BreadcrumbNav segments={segments} />
-            </div>
-
-            {/* Search */}
-            <div className="relative flex-1 md:max-w-64">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Filter files…"
-                className="pl-8 h-8 text-sm bg-muted/40 border-input/60 focus-visible:bg-background"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Sort (mobile/compact) */}
+        <div className="controls-bar border-b border-border bg-background/80 backdrop-blur">
+          <div className="mx-auto flex h-10 max-w-7xl items-center gap-2.5 px-4">
             <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <DropdownMenuTrigger
-                      className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'size-8 shrink-0 md:hidden')}
-                    />
-                  }
+              <DropdownMenuTrigger
+                className={cn(
+                  buttonVariants({ variant: 'ghost', size: 'sm' }),
+                  'gap-1.5 px-2 text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <ArrowUpDown className="size-3.5" />
+                <span className="whitespace-nowrap">Sort: {sortLabel}</span>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="start" className="w-44">
+                <DropdownMenuRadioGroup
+                  value={sortKey}
+                  onValueChange={value => {
+                    const nextSortKey = value as SortKey
+                    if (nextSortKey !== sortKey) {
+                      setSortKey(nextSortKey)
+                      setSortDir('asc')
+                    }
+                  }}
                 >
-                  <ArrowUpDown className="size-4" />
-                </TooltipTrigger>
-                <TooltipContent>Sort</TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuRadioGroup value={sortKey} onValueChange={v => setSortKey(v as SortKey)}>
-                  <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="mtime">Modified</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="size">Size</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="type">Type</DropdownMenuRadioItem>
+                  {SORT_OPTIONS.map(option => (
+                    <DropdownMenuRadioItem key={option.value} value={option.value}>
+                      {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Settings button — always visible */}
             <Tooltip>
               <TooltipTrigger
                 className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'size-8 shrink-0')}
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Open settings"
+                onClick={() => setSortDir(currentDir => (currentDir === 'asc' ? 'desc' : 'asc'))}
+                aria-label={`Switch to ${sortDir === 'asc' ? 'descending' : 'ascending'} order`}
               >
-                <Settings className="size-4" />
+                {sortDir === 'asc' ? <SortAsc className="size-4" /> : <SortDesc className="size-4" />}
               </TooltipTrigger>
-              <TooltipContent>Settings</TooltipContent>
+              <TooltipContent>{sortDir === 'asc' ? 'Ascending order' : 'Descending order'}</TooltipContent>
             </Tooltip>
 
-          </div>
+            <div className="flex-1" />
 
-          {/* Mobile breadcrumb */}
-          <div className="md:hidden px-4 py-2">
-            <BreadcrumbNav segments={segments} />
-          </div>
-        </header>
-
-        {/* ── Display controls bar ── */}
-        <div className="controls-bar border-b border-border bg-background/80 backdrop-blur">
-          <div className="max-w-7xl mx-auto px-4 h-10 flex items-center gap-4">
-
-            {/* View toggle */}
-            <div className="flex items-center gap-1 border border-border rounded-md p-0.5">
-              <Tooltip>
-                <TooltipTrigger
-                  className={cn(
-                    buttonVariants({ variant: 'ghost', size: 'icon' }),
-                    'size-8',
-                    view === 'list' ? 'bg-muted text-foreground' : 'text-muted-foreground',
-                  )}
-                  onClick={() => setView('list')}
-                  aria-label="List view"
-                >
-                  <LayoutList className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipContent>List view</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  className={cn(
-                    buttonVariants({ variant: 'ghost', size: 'icon' }),
-                    'size-8',
-                    view === 'grid' ? 'bg-muted text-foreground' : 'text-muted-foreground',
-                  )}
-                  onClick={() => setView('grid')}
-                  aria-label="Grid view"
-                >
-                  <LayoutGrid className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipContent>Grid view</TooltipContent>
-              </Tooltip>
-            </div>
-
+            {isMobile && (
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {sorted.length} item{sorted.length !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* ── Main content ── */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4">
-
-          {/* "Go up" row */}
+        <main className="mx-auto flex-1 w-full max-w-7xl px-4 py-4">
           {upHref && (
             <a
               href={upHref}
-              className="flex items-center gap-3 px-4 py-2.5 rounded-md hover:bg-muted/60 transition-colors text-sm no-underline mb-1"
+              className={cn(
+                'mb-1 flex items-center gap-3 rounded-md px-4 text-sm transition-colors hover:bg-muted/60 no-underline',
+                isMobile ? 'py-3' : 'py-2.5',
+              )}
             >
-              <FolderOpen className="size-4.5 text-yellow-400/90 shrink-0" strokeWidth={1.5} />
+              <FolderOpen
+                className={cn('shrink-0 text-yellow-400/90', isMobile ? 'size-5' : 'size-4.5')}
+                strokeWidth={1.5}
+              />
               <span className="text-muted-foreground">..</span>
             </a>
           )}
 
-          {/* List view column headers */}
-          {view === 'list' && sorted.length > 0 && (
-            <div className="flex items-center gap-3 px-4 py-1.5 mb-0.5">
+          {!isMobile && view === 'list' && sorted.length > 0 && (
+            <div className="mb-0.5 flex items-center gap-3 px-4 py-1.5">
               <span className="w-4.5 shrink-0" />
+
               <SortButton
                 label="Name"
                 sortKey="name"
@@ -495,32 +606,31 @@ export default function App() {
                 onSort={handleSort}
                 className="flex-1"
               />
+
               <SortButton
                 label="Modified"
                 sortKey="mtime"
                 current={sortKey}
                 dir={sortDir}
                 onSort={handleSort}
-                className="hidden sm:flex w-44 justify-end"
+                className="w-44 justify-end"
               />
+
               <SortButton
                 label="Size"
                 sortKey="size"
                 current={sortKey}
                 dir={sortDir}
                 onSort={handleSort}
-                className="hidden md:flex w-20 justify-end"
+                className="w-20 justify-end"
               />
             </div>
           )}
 
-          {/* Empty / no-results state */}
           {sorted.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
+            <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
               <FolderOpen className="size-10 opacity-30" strokeWidth={1} />
-              <p className="text-sm">
-                {search ? `No files match "${search}"` : 'This directory is empty'}
-              </p>
+              <p className="text-sm">{search ? `No files match "${search}"` : 'This directory is empty'}</p>
               {search && (
                 <Button variant="ghost" size="sm" onClick={() => setSearch('')}>
                   Clear filter
@@ -529,69 +639,79 @@ export default function App() {
             </div>
           )}
 
-          {/* File listing */}
           {view === 'list' ? (
             <div className="flex flex-col gap-px">
               {sorted.map(entry => (
-                <FileRow key={entry.href} entry={entry} />
+                <FileRow key={entry.href} entry={entry} isMobile={isMobile} />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+            <div
+              className={cn(
+                'grid gap-2',
+                isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8',
+              )}
+            >
               {sorted.map(entry => (
-                <FileCard key={entry.href} entry={entry} />
+                <FileCard key={entry.href} entry={entry} isMobile={isMobile} />
               ))}
             </div>
           )}
-
         </main>
 
-        {/* ── Status bar ── */}
         <footer className="border-t border-border bg-background/80 backdrop-blur">
-          <div className="relative max-w-7xl mx-auto px-4 min-h-9 py-2 h-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span>{dirCount} folder{dirCount !== 1 ? 's' : ''}</span>
-            <Separator orientation="vertical" className="h-3" />
-            <span>{fileCount} file{fileCount !== 1 ? 's' : ''}</span>
-            {totalBytes > 0 && (
-              <>
-                <Separator orientation="vertical" className="h-3" />
-                <span>{formatSizeBytes(totalBytes)} total</span>
-              </>
-            )}
-            {search && filtered.length !== visibleEntries.length && (
-              <>
-                <Separator orientation="vertical" className="h-3" />
-                <span className="text-foreground/70">{sorted.length} shown</span>
-              </>
-            )}
+          {isMobile ? (
+            <div className="mx-auto flex min-h-9 max-w-7xl items-center justify-center px-4 py-2 text-xs text-muted-foreground">
+              <span className="w-full text-center text-muted-foreground/50">{creditContent}</span>
+            </div>
+          ) : (
+            <div className="relative mx-auto flex min-h-9 h-auto max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs text-muted-foreground">
+              <span>{dirCount} folder{dirCount !== 1 ? 's' : ''}</span>
+              <Separator orientation="vertical" className="h-3" />
+              <span>{fileCount} file{fileCount !== 1 ? 's' : ''}</span>
 
-            {/* Center credit */}
-            <span className="absolute left-1/2 -translate-x-1/2 text-muted-foreground/50 whitespace-nowrap">
-              Powered by{' '}
-              <a
-                href="https://github.com/teppyboy/sandrone-autoindex"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground/70 hover:text-foreground transition-colors no-underline"
-              >
-                Sandrone-AutoIndex
-              </a>
-            </span>
-          </div>
+              {totalBytes > 0 && (
+                <>
+                  <Separator orientation="vertical" className="h-3" />
+                  <span>{formatSizeBytes(totalBytes)} total</span>
+                </>
+              )}
+
+              {search && filtered.length !== visibleEntries.length && (
+                <>
+                  <Separator orientation="vertical" className="h-3" />
+                  <span className="text-foreground/70">{sorted.length} shown</span>
+                </>
+              )}
+
+              <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-muted-foreground/50">
+                {creditContent}
+              </span>
+            </div>
+          )}
         </footer>
-
       </div>
 
-      {/* Settings sheet — rendered outside main div so it can portal freely */}
       <SettingsSheet
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         theme={theme}
         onThemeChange={setTheme}
+        view={view}
+        onViewChange={setView}
         palette={palette}
         onPaletteChange={setPalette}
         bgBrightness={bgBrightness}
         onBgBrightnessChange={setBgBrightness}
+        bgBlur={bgBlur}
+        onBgBlurChange={setBgBlur}
+      />
+
+      <MobileSearchSheet
+        open={isMobile && mobileSearchOpen}
+        onOpenChange={setMobileSearchOpen}
+        search={search}
+        onSearchChange={setSearch}
       />
     </TooltipProvider>
   )

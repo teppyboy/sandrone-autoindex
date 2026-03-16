@@ -16,7 +16,7 @@ function autoindexSnippets(): Plugin {
       // Inline theme-init script: reads localStorage before React mounts to
       // avoid a flash of the wrong theme or palette. Defaults to dark if no
       // preference saved. Also restores palette class (palette-NAME) on <html>.
-      const themeInit = `<script>(function(){try{var t=localStorage.getItem('sandrone-theme');document.documentElement.classList.toggle('dark',t!=='light');var p=localStorage.getItem('sandrone-palette');if(p&&p!=='neutral')document.documentElement.classList.add('palette-'+p);if(p==='sandrone')document.documentElement.classList.add('dark');var b=localStorage.getItem('sandrone-bg-brightness');document.documentElement.style.setProperty('--bg-brightness',b?(+b/100).toFixed(2):'0.70')}catch(e){document.documentElement.classList.add('dark')}})()</script>`
+      const themeInit = `<script>(function(){try{var t=localStorage.getItem('sandrone-theme');document.documentElement.classList.toggle('dark',t!=='light');var p=localStorage.getItem('sandrone-palette');if(p&&p!=='neutral')document.documentElement.classList.add('palette-'+p);if(p==='sandrone')document.documentElement.classList.add('dark');var b=localStorage.getItem('sandrone-bg-brightness');document.documentElement.style.setProperty('--bg-brightness',b?(+b/100).toFixed(2):'0.70');var u=localStorage.getItem('sandrone-bg-blur');document.documentElement.style.setProperty('--bg-blur',u&&Number.isFinite(+u)?(+u)+'px':'0px')}catch(e){document.documentElement.classList.add('dark')}})()</script>`
 
       const before = `${themeInit}
 <link rel="stylesheet" href="${base}assets/index.css">

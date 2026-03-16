@@ -1,4 +1,4 @@
-import { Moon, Sun } from 'lucide-react'
+import { LayoutGrid, LayoutList, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Sheet,
@@ -6,7 +6,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import type { Palette, Theme } from '@/lib/types'
+import type { Palette, Theme, ViewMode } from '@/lib/types'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 // ─── Palette swatch definitions ──────────────────────────────────────────────
 
@@ -27,10 +28,14 @@ interface SettingsSheetProps {
   onOpenChange: (open: boolean) => void
   theme: Theme
   onThemeChange: (theme: Theme) => void
+  view: ViewMode
+  onViewChange: (view: ViewMode) => void
   palette: Palette
   onPaletteChange: (palette: Palette) => void
   bgBrightness: number
   onBgBrightnessChange: (value: number) => void
+  bgBlur: number
+  onBgBlurChange: (value: number) => void
 }
 
 export function SettingsSheet({
@@ -38,19 +43,72 @@ export function SettingsSheet({
   onOpenChange,
   theme,
   onThemeChange,
+  view,
+  onViewChange,
   palette,
   onPaletteChange,
   bgBrightness,
   onBgBrightnessChange,
+  bgBlur,
+  onBgBlurChange,
 }: SettingsSheetProps) {
+  const isMobile = useIsMobile()
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-72 sm:max-w-72">
+      <SheetContent
+        side={isMobile ? 'bottom' : 'right'}
+        className={cn(
+          isMobile
+            ? 'max-h-[85dvh] rounded-t-2xl overflow-y-auto'
+            : 'w-72 sm:max-w-72',
+        )}
+      >
+        {/* Drag handle — mobile only */}
+        {isMobile && (
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1.5 rounded-full bg-muted-foreground/20" />
+          </div>
+        )}
+
         <SheetHeader>
           <SheetTitle>Settings</SheetTitle>
         </SheetHeader>
 
         <div className="px-4 pb-6 space-y-6">
+
+          {/* ── Layout (list / grid) ── */}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+              Layout
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onViewChange('list')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-2 h-9 rounded-md border text-sm transition-colors',
+                  view === 'list'
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:border-border/60',
+                )}
+              >
+                <LayoutList className="size-3.5" />
+                List
+              </button>
+              <button
+                onClick={() => onViewChange('grid')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-2 h-9 rounded-md border text-sm transition-colors',
+                  view === 'grid'
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:border-border/60',
+                )}
+              >
+                <LayoutGrid className="size-3.5" />
+                Grid
+              </button>
+            </div>
+          </div>
 
           {/* ── Appearance (dark / light) ── */}
           <div>
@@ -120,22 +178,42 @@ export function SettingsSheet({
 
           {/* ── Background brightness (Sandrone only) ── */}
           {palette === 'sandrone' && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Background brightness
-                </p>
-                <span className="text-xs tabular-nums text-muted-foreground">{bgBrightness}%</span>
+            <div className="space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Background brightness
+                  </p>
+                  <span className="text-xs tabular-nums text-muted-foreground">{bgBrightness}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={10}
+                  max={100}
+                  step={5}
+                  value={bgBrightness}
+                  onChange={e => onBgBrightnessChange(Number(e.target.value))}
+                  className="w-full cursor-pointer accent-primary"
+                />
               </div>
-              <input
-                type="range"
-                min={10}
-                max={100}
-                step={5}
-                value={bgBrightness}
-                onChange={e => onBgBrightnessChange(Number(e.target.value))}
-                className="w-full cursor-pointer accent-primary"
-              />
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Background blur
+                  </p>
+                  <span className="text-xs tabular-nums text-muted-foreground">{bgBlur}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={16}
+                  step={1}
+                  value={bgBlur}
+                  onChange={e => onBgBlurChange(Number(e.target.value))}
+                  className="w-full cursor-pointer accent-primary"
+                />
+              </div>
             </div>
           )}
 
