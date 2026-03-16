@@ -2,12 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sandrone-autoindex</title>
+    <title>Index of /srv/files/projects/</title>
+    <!-- Theme + palette init: apply saved preferences before render to avoid flash -->
+    <script>(function(){try{var t=localStorage.getItem('sandrone-theme');document.documentElement.classList.toggle('dark',t!=='light');var p=localStorage.getItem('sandrone-palette');if(p&&p!=='neutral')document.documentElement.classList.add('palette-'+p);if(p==='sandrone')document.documentElement.classList.add('dark');var b=localStorage.getItem('sandrone-bg-brightness');document.documentElement.style.setProperty('--bg-brightness',b?(+b/100).toFixed(2):'0.70')}catch(e){document.documentElement.classList.add('dark')}})()</script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Simulated nginx autoindex content (hidden by CSS in production) -->
+    <h1>Index of /srv/files/projects/</h1>
+    <hr />
+    <pre>
+<a href="../">../</a>                                                   -
+<a href="_autoindex/">_autoindex/</a>                               01-Jan-2025 00:00        -
+<a href="alpha/">alpha/</a>                                    15-Jan-2025 10:30        -
+<a href="beta/">beta/</a>                                     20-Feb-2025 14:22        -
+<a href="archive/">archive/</a>                                  03-Mar-2025 09:00        -
+<a href="README.md">README.md</a>                                 01-Jan-2025 08:00      4096
+<a href="Makefile">Makefile</a>                                  12-Jan-2025 11:45      1234
+<a href="report-2025.pdf">report-2025.pdf</a>                           28-Feb-2025 16:00   2097152
+<a href="dataset.csv">dataset.csv</a>                               10-Mar-2025 12:10    524288
+<a href="photo.jpg">photo.jpg</a>                                 05-Feb-2025 09:30   3145728
+<a href="backup.tar.gz">backup.tar.gz</a>                             01-Mar-2025 00:00  10485760
+<a href="config.json">config.json</a>                               14-Jan-2025 17:30      8192
+<a href="deploy.sh">deploy.sh</a>                                 22-Jan-2025 13:00      2048
+    </pre>
+    <hr />
+
+    <!-- before.html injection point: mount root + CSS -->
+    <div id="autoindex-root"></div>
+
+    <!-- after.html injection point: JS bundle -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
