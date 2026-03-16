@@ -265,13 +265,13 @@ function BreadcrumbNav({ segments, className }: BreadcrumbNavProps) {
             {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />}
 
             {isLast ? (
-              <span className="text-sm font-medium text-foreground">
+              <span className="inline-flex min-h-5 items-center text-sm font-medium leading-5 text-foreground">
                 {index === 0 ? <House className="size-3.5" /> : segment.label}
               </span>
             ) : (
               <a
                 href={segment.href}
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground no-underline"
+                className="inline-flex min-h-5 items-center text-sm leading-5 text-muted-foreground transition-colors hover:text-foreground no-underline"
               >
                 {index === 0 ? <House className="size-3.5" /> : segment.label}
               </a>
