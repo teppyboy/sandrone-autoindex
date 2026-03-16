@@ -4,6 +4,7 @@ import {
   ChevronRight,
   FolderOpen,
   House,
+  MoreHorizontal,
   Search,
   Server,
   Settings,
@@ -19,6 +20,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -251,30 +253,146 @@ function FileCard({ entry, isMobile }: FileCardProps) {
 
 interface BreadcrumbNavProps {
   segments: BreadcrumbSegment[]
+  isMobile?: boolean
   className?: string
 }
 
-function BreadcrumbNav({ segments, className }: BreadcrumbNavProps) {
+type BreadcrumbDisplayItem =
+  | {
+      type: 'segment'
+      segment: BreadcrumbSegment
+      isLast: boolean
+    }
+  | {
+      type: 'overflow'
+      segments: BreadcrumbSegment[]
+    }
+
+function BreadcrumbOverflowMenu({ segments }: { segments: BreadcrumbSegment[] }) {
   return (
-    <nav aria-label="Directory path" className={cn('flex items-center gap-1', className)}>
-      {segments.map((segment, index) => {
-        const isLast = index === segments.length - 1
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          buttonVariants({ variant: 'ghost', size: 'icon-xs' }),
+          'size-6 text-muted-foreground hover:text-foreground',
+        )}
+        aria-label="Show hidden breadcrumb segments"
+      >
+        <MoreHorizontal className="size-3.5" />
+      </DropdownMenuTrigger>
 
+      <DropdownMenuContent align="start" className="w-64 max-w-[calc(100vw-2rem)]">
+        {segments.map(segment => (
+          <DropdownMenuItem
+            key={segment.href}
+            className="items-start py-2"
+            title={segment.label}
+            onClick={() => {
+              window.location.assign(segment.href)
+            }}
+          >
+            <span className="whitespace-normal [overflow-wrap:anywhere]">{segment.label}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+interface BreadcrumbSegmentItemProps {
+  segment: BreadcrumbSegment
+  isLast: boolean
+  isMobile: boolean
+}
+
+function BreadcrumbSegmentItem({ segment, isLast, isMobile }: BreadcrumbSegmentItemProps) {
+  const isRoot = segment.href === '/'
+  const desktopLabelClassName = 'block max-w-40 truncate lg:max-w-52 xl:max-w-64'
+  const mobileLabelClassName = 'block max-w-full [overflow-wrap:anywhere]'
+
+  if (isLast) {
+    return isRoot ? (
+      <span className="inline-flex min-h-5 items-center text-sm font-medium leading-5 text-foreground">
+        <House className="size-3.5" />
+      </span>
+    ) : (
+      <span
+        className={cn(
+          'min-h-5 text-sm font-medium leading-5 text-foreground',
+          isMobile ? mobileLabelClassName : desktopLabelClassName,
+        )}
+        title={isMobile ? undefined : segment.label}
+      >
+        {segment.label}
+      </span>
+    )
+  }
+
+  return isRoot ? (
+    <a
+      href={segment.href}
+      className="inline-flex min-h-5 items-center text-muted-foreground transition-colors hover:text-foreground no-underline"
+      aria-label="Root"
+    >
+      <House className="size-3.5" />
+    </a>
+  ) : (
+    <a
+      href={segment.href}
+      className={cn(
+        'min-h-5 text-sm leading-5 text-muted-foreground transition-colors hover:text-foreground no-underline',
+        isMobile ? mobileLabelClassName : desktopLabelClassName,
+      )}
+      title={isMobile ? undefined : segment.label}
+    >
+      {segment.label}
+    </a>
+  )
+}
+
+function BreadcrumbNav({ segments, isMobile = false, className }: BreadcrumbNavProps) {
+  const displayItems: BreadcrumbDisplayItem[] =
+    !isMobile && segments.length > 4
+      ? [
+          { type: 'segment', segment: segments[0], isLast: false },
+          { type: 'overflow', segments: segments.slice(1, -2) },
+          { type: 'segment', segment: segments[segments.length - 2], isLast: false },
+          { type: 'segment', segment: segments[segments.length - 1], isLast: true },
+        ]
+      : segments.map((segment, index) => ({
+          type: 'segment' as const,
+          segment,
+          isLast: index === segments.length - 1,
+        }))
+
+  return (
+    <nav
+      aria-label="Directory path"
+      className={cn(
+        'flex gap-1',
+        isMobile ? 'w-full flex-wrap items-start content-start gap-y-1' : 'min-w-0 flex-wrap items-center',
+        className,
+      )}
+    >
+      {displayItems.map((item, index) => {
         return (
-          <span key={segment.href} className="flex shrink-0 items-center gap-1">
-            {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />}
+          <span
+            key={item.type === 'segment' ? item.segment.href : 'breadcrumb-overflow'}
+            className={cn(
+              'flex gap-1',
+              isMobile ? 'min-w-0 max-w-full items-start' : 'shrink-0 items-center',
+            )}
+          >
+            {index > 0 && (
+              <ChevronRight
+                className={cn('size-3.5 shrink-0 text-muted-foreground/50', isMobile && 'mt-0.5')}
+              />
+            )}
 
-            {isLast ? (
-              <span className="inline-flex min-h-5 items-center text-sm font-medium leading-5 text-foreground">
-                {index === 0 ? <House className="size-3.5" /> : segment.label}
-              </span>
+            {item.type === 'overflow' ? (
+              <BreadcrumbOverflowMenu segments={item.segments} />
             ) : (
-              <a
-                href={segment.href}
-                className="inline-flex min-h-5 items-center text-sm leading-5 text-muted-foreground transition-colors hover:text-foreground no-underline"
-              >
-                {index === 0 ? <House className="size-3.5" /> : segment.label}
-              </a>
+              <BreadcrumbSegmentItem segment={item.segment} isLast={item.isLast} isMobile={isMobile} />
             )}
           </span>
         )
@@ -502,8 +620,8 @@ export default function App() {
                 {settingsButton}
               </div>
 
-              <div className="breadcrumb-scroll mx-auto max-w-7xl overflow-x-auto pl-5 pr-4 pt-2 pb-3">
-                <BreadcrumbNav segments={segments} className="min-w-max flex-nowrap" />
+              <div className="breadcrumb-scroll mx-auto max-w-7xl overflow-y-auto overflow-x-hidden pl-5 pr-4 pt-2 pb-3">
+                <BreadcrumbNav segments={segments} isMobile className="max-h-24" />
               </div>
             </>
           ) : (
@@ -514,7 +632,7 @@ export default function App() {
               </div>
 
               <div className="min-w-0 flex-1">
-                <BreadcrumbNav segments={segments} className="flex-wrap" />
+                <BreadcrumbNav segments={segments} />
               </div>
 
               {renderSearchField('w-64 shrink-0')}

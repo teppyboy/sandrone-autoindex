@@ -108,12 +108,16 @@ body:has(#autoindex-root) > html {
   display: none !important;
 }
 
-/* Horizontal-scrollable breadcrumb row on mobile — hides the scrollbar */
+/* Mobile breadcrumb area can wrap and scroll vertically for long paths */
 .breadcrumb-scroll {
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 .breadcrumb-scroll::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+}
+.breadcrumb-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
+  border-radius: 999px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
