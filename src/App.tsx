@@ -499,10 +499,10 @@ export default function App() {
 
   const segments = useMemo(() => pathSegments(path), [path])
 
-  const visibleEntries = useMemo(() => {
-    if (path !== '/') return entries
-    return entries.filter(entry => !(entry.type === 'directory' && entry.name === '_autoindex'))
-  }, [entries, path])
+  const visibleEntries = useMemo(
+    () => entries.filter(entry => !(entry.type === 'directory' && entry.name === '_autoindex')),
+    [entries],
+  )
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
