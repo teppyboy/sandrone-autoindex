@@ -19,6 +19,7 @@ import {
 
 import { AuthSheet } from "@/components/autoindex/AuthSheet";
 import { DeleteConfirmSheet } from "@/components/autoindex/DeleteConfirmSheet";
+import { DropOverlay } from "@/components/autoindex/DropOverlay";
 import { EntryActions } from "@/components/autoindex/EntryActions";
 import { FileIcon } from "@/components/autoindex/FileIcon";
 import { MobileSearchSheet } from "@/components/autoindex/MobileSearchSheet";
@@ -222,26 +223,88 @@ interface FileRowProps {
   onRename: (entry: Entry) => void;
   onMove: (entry: Entry) => void;
   onDelete: (entry: Entry) => void;
+  onDragStart?: (entry: Entry) => void;
+  onDragEnd?: () => void;
+  onMoveToDirectory?: (sourceEntry: Entry, targetDir: Entry) => void;
+  draggedEntry: Entry | null;
 }
 
-function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, onMove, onDelete }: FileRowProps) {
+function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry }: FileRowProps) {
   const isDirectory = entry.type === "directory";
+  const isDragging = draggedEntry?.href === entry.href;
+  const isDropTarget = isDirectory && draggedEntry !== null && draggedEntry.href !== entry.href;
   const sizeLabel = isDirectory
     ? null
     : entry.rawSize != null
       ? formatSizeBytes(entry.rawSize)
       : (entry.size ?? null);
 
+  const handleRowDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("application/x/sandrone-entry", JSON.stringify(entry));
+    e.dataTransfer.effectAllowed = "move";
+    onDragStart?.(entry);
+  };
+
+  const handleRowDragEnd = () => {
+    onDragEnd?.();
+  };
+
+  const handleDirDragOver = (e: React.DragEvent) => {
+    if (!isDropTarget) return;
+    if (!e.dataTransfer.types.includes("application/x/sandrone-entry")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDirDragEnter = (e: React.DragEvent) => {
+    if (!isDropTarget) return;
+    if (!e.dataTransfer.types.includes("application/x/sandrone-entry")) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).classList.add("drag-over-directory");
+  };
+
+  const handleDirDragLeave = (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove("drag-over-directory");
+  };
+
+  const handleDirDrop = (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove("drag-over-directory");
+    if (!isDropTarget) return;
+    if (!e.dataTransfer.types.includes("application/x/sandrone-entry")) return;
+    e.preventDefault();
+
+    try {
+      const data = e.dataTransfer.getData("application/x/sandrone-entry");
+      const sourceEntry = JSON.parse(data) as Entry;
+      if (sourceEntry.href === entry.href) return;
+      onMoveToDirectory?.(sourceEntry, entry);
+    } catch {
+      // ignore parse errors
+    }
+  };
+
   return (
     <div
       className={cn(
         "group flex items-center gap-3 px-4 rounded-md hover:bg-muted/60 transition-colors text-sm",
         isMobile ? "py-3" : "py-2.5",
+        isDragging && "dragging",
+        isDropTarget && "drag-over-directory",
       )}
+      draggable={isAuthenticated}
+      onDragStart={handleRowDragStart}
+      onDragEnd={handleRowDragEnd}
+      onDragOver={handleDirDragOver}
+      onDragEnter={handleDirDragEnter}
+      onDragLeave={handleDirDragLeave}
+      onDrop={handleDirDrop}
     >
       <a
         href={entry.href}
         className="flex flex-1 min-w-0 items-center gap-3 no-underline"
+        onClick={(e) => {
+          if (isDragging) e.preventDefault();
+        }}
       >
         <FileIcon
           name={entry.name}
@@ -307,15 +370,76 @@ interface FileCardProps {
   onRename: (entry: Entry) => void;
   onMove: (entry: Entry) => void;
   onDelete: (entry: Entry) => void;
+  onDragStart?: (entry: Entry) => void;
+  onDragEnd?: () => void;
+  onMoveToDirectory?: (sourceEntry: Entry, targetDir: Entry) => void;
+  draggedEntry: Entry | null;
 }
 
-function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete }: FileCardProps) {
+function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry }: FileCardProps) {
+  const isDirectory = entry.type === "directory";
+  const isDragging = draggedEntry?.href === entry.href;
+  const isDropTarget = isDirectory && draggedEntry !== null && draggedEntry.href !== entry.href;
+
+  const handleCardDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("application/x/sandrone-entry", JSON.stringify(entry));
+    e.dataTransfer.effectAllowed = "move";
+    onDragStart?.(entry);
+  };
+
+  const handleCardDragEnd = () => {
+    onDragEnd?.();
+  };
+
+  const handleDirDragOver = (e: React.DragEvent) => {
+    if (!isDropTarget) return;
+    if (!e.dataTransfer.types.includes("application/x/sandrone-entry")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDirDragEnter = (e: React.DragEvent) => {
+    if (!isDropTarget) return;
+    if (!e.dataTransfer.types.includes("application/x/sandrone-entry")) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).classList.add("drag-over-directory");
+  };
+
+  const handleDirDragLeave = (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove("drag-over-directory");
+  };
+
+  const handleDirDrop = (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove("drag-over-directory");
+    if (!isDropTarget) return;
+    if (!e.dataTransfer.types.includes("application/x/sandrone-entry")) return;
+    e.preventDefault();
+
+    try {
+      const data = e.dataTransfer.getData("application/x/sandrone-entry");
+      const sourceEntry = JSON.parse(data) as Entry;
+      if (sourceEntry.href === entry.href) return;
+      onMoveToDirectory?.(sourceEntry, entry);
+    } catch {
+      // ignore parse errors
+    }
+  };
+
   return (
     <div
       className={cn(
         "group relative flex flex-col items-center gap-2 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center",
         isMobile ? "p-3" : "p-4",
+        isDragging && "dragging",
+        isDropTarget && "drag-over-directory",
       )}
+      draggable={isAuthenticated}
+      onDragStart={handleCardDragStart}
+      onDragEnd={handleCardDragEnd}
+      onDragOver={handleDirDragOver}
+      onDragEnter={handleDirDragEnter}
+      onDragLeave={handleDirDragLeave}
+      onDrop={handleDirDrop}
     >
       {isAuthenticated && (
         <div className="absolute top-1 right-1">
@@ -328,7 +452,11 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
         </div>
       )}
 
-      <a href={entry.href} className="flex flex-col items-center gap-2 no-underline">
+      <a href={entry.href} className="flex flex-col items-center gap-2 no-underline"
+        onClick={(e) => {
+          if (isDragging) e.preventDefault();
+        }}
+      >
         <FileIcon
           name={entry.name}
           isDir={entry.type === "directory"}
@@ -620,6 +748,9 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState<Entry | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<FileOperationStatus>("idle");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [draggedEntry, setDraggedEntry] = useState<Entry | null>(null);
+  const [osDragCounter, setOsDragCounter] = useState(0);
 
   const preferredTheme = palette === "sandrone" ? "dark" : theme;
   const effectiveMobileSearchOpen = isMobile ? mobileSearchOpen : false;
@@ -1112,9 +1243,83 @@ export default function App() {
     }
   };
 
+  const handleMoveToDirectory = async (sourceEntry: Entry, targetDir: Entry) => {
+    if (!authorization) return;
+
+    try {
+      const sourceUrl = buildResourceUrl(sourceEntry.name);
+      const targetDirUrl = new URL(
+        encodeURIComponent(targetDir.name) + "/",
+        new URL(window.location.href.endsWith("/")
+          ? window.location.href
+          : window.location.href + "/"),
+      ).toString();
+      const destUrl = new URL(
+        encodeURIComponent(sourceEntry.name),
+        targetDirUrl,
+      ).toString();
+      await moveResource(sourceUrl, destUrl, authorization);
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The move operation failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setUploadMessage(message);
+    }
+  };
+
+  const handleGlobalDragEnter = (e: React.DragEvent) => {
+    if (draggedEntry) return;
+    if (!e.dataTransfer.types.includes("Files")) return;
+    setOsDragCounter((c) => c + 1);
+  };
+
+  const handleGlobalDragOver = (e: React.DragEvent) => {
+    if (draggedEntry) return;
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleGlobalDragLeave = () => {
+    if (draggedEntry) return;
+    setOsDragCounter((c) => {
+      const next = c - 1;
+      return next < 0 ? 0 : next;
+    });
+  };
+
+  const handleGlobalDrop = (e: React.DragEvent) => {
+    if (draggedEntry) return;
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    setOsDragCounter(0);
+
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+
+    handleFilesSelected(files);
+  };
+
   return (
     <TooltipProvider>
-      <div className="autoindex-app flex min-h-screen flex-col bg-background text-foreground">
+      <div
+        className="autoindex-app flex min-h-screen flex-col bg-background text-foreground"
+        onDragEnter={handleGlobalDragEnter}
+        onDragOver={handleGlobalDragOver}
+        onDragLeave={handleGlobalDragLeave}
+        onDrop={handleGlobalDrop}
+      >
+        <DropOverlay visible={osDragCounter > 0} />
         <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
           {isMobile ? (
             <>
@@ -1368,7 +1573,7 @@ export default function App() {
           {view === "list" ? (
             <div className="flex flex-col gap-px">
               {sorted.map((entry) => (
-                <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} />
+                <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} />
               ))}
             </div>
           ) : (
@@ -1381,7 +1586,7 @@ export default function App() {
               )}
             >
               {sorted.map((entry) => (
-                <FileCard key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} />
+                <FileCard key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} />
               ))}
             </div>
           )}

@@ -262,3 +262,51 @@ body:has(#autoindex-root) > html {
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border-color: var(--glass-border);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DRAG AND DROP
+   Styles for OS file drop overlay and internal entry drag-and-drop.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Full-page overlay when dragging OS files over the page */
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklch, var(--background) 85%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: drag-overlay-in 150ms ease-out;
+}
+
+@keyframes drag-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Entry being dragged (source) */
+.dragging {
+  opacity: 0.4;
+}
+
+/* Directory acting as a valid drop target */
+.drag-over-directory {
+  background: color-mix(in oklch, var(--primary) 12%, transparent) !important;
+  outline: 2px dashed var(--ring) !important;
+  outline-offset: -2px;
+}
+
+/* Drag handle cursor on draggable rows */
+.drag-handle {
+  cursor: grab;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
