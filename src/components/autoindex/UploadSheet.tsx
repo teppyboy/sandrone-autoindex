@@ -1,13 +1,5 @@
-import {
-  ChevronRight,
-  CircleAlert,
-  Folder,
-  FolderOpen,
-  LoaderCircle,
-  Upload,
-  X,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CircleAlert, LoaderCircle, Upload, X } from "lucide-react";
+import { useMemo, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox, CheckboxLabel } from "@/components/ui/checkbox";
@@ -18,11 +10,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { DestinationPicker } from "@/components/autoindex/DestinationPicker";
 import type { Entry } from "@/lib/parser";
-import { pathSegments } from "@/lib/parser";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { cn } from "@/lib/utils";
-import { fetchDirectoryListing } from "@/lib/webdav/client";
 import type { UploadItem } from "@/lib/webdav/types";
 
 interface UploadSheetProps {
@@ -50,121 +41,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
   return `${(bytes / 1073741824).toFixed(2)} GB`;
-}
-
-function SubdirectoryPicker({
-  currentPath,
-  actualPath,
-  currentEntries,
-  onNavigate,
-  disabled,
-}: {
-  currentPath: string;
-  actualPath: string;
-  currentEntries?: Entry[];
-  onNavigate: (path: string) => void;
-  disabled?: boolean;
-}) {
-  const [fetchedEntries, setFetchedEntries] = useState<Entry[] | null>(null);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const fetchRef = useRef(0);
-
-  const normalizedCurrent = currentPath || "/";
-  const normalizedActual = actualPath || "/";
-
-  const isActualPath =
-    normalizedCurrent === normalizedActual ||
-    normalizedCurrent === normalizedActual.replace(/\/$/, "") ||
-    normalizedActual === normalizedCurrent.replace(/\/$/, "");
-
-  useEffect(() => {
-    if (isActualPath) return;
-
-    const fetchId = ++fetchRef.current;
-
-    const dirUrl = new URL(
-      normalizedCurrent.endsWith("/")
-        ? normalizedCurrent
-        : normalizedCurrent + "/",
-      window.location.origin,
-    ).toString();
-
-    fetchDirectoryListing(dirUrl)
-      .then((entries) => {
-        if (fetchRef.current !== fetchId) return;
-        setFetchedEntries(entries);
-        setFetchError(null);
-      })
-      .catch((err) => {
-        if (fetchRef.current !== fetchId) return;
-        setFetchedEntries(null);
-        setFetchError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load subdirectories.",
-        );
-      });
-  }, [normalizedCurrent, isActualPath]);
-
-  const loading = !isActualPath && fetchedEntries === null && fetchError === null;
-
-  const entries = isActualPath
-    ? (currentEntries ?? [])
-    : (fetchedEntries ?? []);
-
-  const directories = entries.filter((e) => e.type === "directory");
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        <LoaderCircle className="size-3.5 animate-spin" />
-        Loading folders...
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-        <CircleAlert className="size-3.5 shrink-0" />
-        {fetchError}
-      </div>
-    );
-  }
-
-  if (directories.length === 0) return null;
-
-  return (
-    <div>
-      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        Folders
-      </p>
-      <div className="max-h-32 overflow-y-auto rounded-lg border border-border bg-muted/20">
-        {directories.map((dir) => (
-          <button
-            key={dir.href}
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              const newDest = (normalizedCurrent.endsWith("/")
-                ? normalizedCurrent
-                : normalizedCurrent + "/") + encodeURIComponent(dir.name) + "/";
-              onNavigate(newDest);
-            }}
-            className={cn(
-              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
-              disabled
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-muted/60",
-            )}
-          >
-            <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate">{dir.name}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export function UploadSheet({
@@ -198,32 +74,6 @@ export function UploadSheet({
           item.status === "error",
       ).length,
     [items],
-  );
-
-  const segments = pathSegments(currentPath || "/");
-
-  const destinationBreadcrumb = (
-    <div className="flex items-center gap-0.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {segments.map((segment, i) => (
-        <span key={segment.href} className="flex shrink-0 items-center gap-0.5">
-          {i > 0 && (
-            <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />
-          )}
-          <button
-            type="button"
-            onClick={() => onDestinationChange?.(segment.href)}
-            className={cn(
-              "rounded px-1 py-0.5 font-mono text-xs transition-colors",
-              i === segments.length - 1
-                ? "text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            {segment.label}
-          </button>
-        </span>
-      ))}
-    </div>
   );
 
   const queueContent = (
@@ -400,22 +250,6 @@ export function UploadSheet({
     </Button>
   );
 
-  const destinationSection = (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
-        {destinationBreadcrumb}
-      </div>
-      <SubdirectoryPicker
-        currentPath={currentPath}
-        actualPath={actualPath}
-        currentEntries={currentEntries}
-        onNavigate={(p) => onDestinationChange?.(p)}
-        disabled={disabled || busy}
-      />
-    </div>
-  );
-
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -443,7 +277,15 @@ export function UploadSheet({
             </div>
 
             {/* Destination with picker */}
-            <div className="mt-2">{destinationSection}</div>
+            <div className="mt-2">
+              <DestinationPicker
+                currentPath={currentPath}
+                actualPath={actualPath}
+                currentEntries={currentEntries}
+                onNavigate={(p) => onDestinationChange?.(p)}
+                disabled={disabled || busy}
+              />
+            </div>
           </div>
 
           {/* Fixed top content */}
@@ -494,7 +336,15 @@ export function UploadSheet({
         </SheetHeader>
 
         {/* Destination with picker */}
-        <div className="px-4">{destinationSection}</div>
+        <div className="px-4">
+          <DestinationPicker
+            currentPath={currentPath}
+            actualPath={actualPath}
+            currentEntries={currentEntries}
+            onNavigate={(p) => onDestinationChange?.(p)}
+            disabled={disabled || busy}
+          />
+        </div>
 
         <div className="space-y-4 px-4 pb-4">
           {fileInput}

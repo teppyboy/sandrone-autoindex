@@ -1201,7 +1201,7 @@ export default function App() {
     }
   };
 
-  const handleMove = async (entry: Entry, destinationPath: string) => {
+  const handleMove = async (entry: Entry, destinationDir: string) => {
     if (!authorization) return;
 
     setMoveStatus("loading");
@@ -1209,7 +1209,11 @@ export default function App() {
 
     try {
       const sourceUrl = buildResourceUrl(entry.name);
-      const destUrl = new URL(destinationPath, window.location.origin).toString();
+      const dirUrl = new URL(
+        destinationDir.endsWith("/") ? destinationDir : destinationDir + "/",
+        window.location.origin,
+      ).toString();
+      const destUrl = new URL(encodeURIComponent(entry.name), dirUrl).toString();
       await moveResource(sourceUrl, destUrl, authorization);
       markWriteSuccess();
 
@@ -1864,6 +1868,8 @@ export default function App() {
         }}
         entry={moveTarget}
         currentPath={path || "/"}
+        actualPath={path || "/"}
+        currentEntries={visibleEntries}
         status={moveStatus}
         error={moveError}
         onMove={handleMove}

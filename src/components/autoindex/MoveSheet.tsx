@@ -2,7 +2,6 @@ import { CircleAlert, FolderInput, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -11,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { DestinationPicker } from "@/components/autoindex/DestinationPicker";
 import type { Entry } from "@/lib/parser";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { cn } from "@/lib/utils";
@@ -21,9 +21,11 @@ interface MoveSheetProps {
   onOpenChange: (open: boolean) => void;
   entry: Entry | null;
   currentPath: string;
+  actualPath: string;
+  currentEntries?: Entry[];
   status: FileOperationStatus;
   error: string | null;
-  onMove: (entry: Entry, destinationPath: string) => void;
+  onMove: (entry: Entry, destinationDir: string) => void;
 }
 
 export function MoveSheet({
@@ -31,6 +33,8 @@ export function MoveSheet({
   onOpenChange,
   entry,
   currentPath,
+  actualPath,
+  currentEntries,
   status,
   error,
   onMove,
@@ -42,15 +46,7 @@ export function MoveSheet({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!entry || !destination.trim() || isBusy) return;
-
-    let dest = destination.trim();
-    if (!dest.startsWith("/")) dest = `/${dest}`;
-    if (entry.type === "directory" && !dest.endsWith("/")) dest += "/";
-
-    const fileName = encodeURIComponent(entry.name);
-    const fullPath = dest.endsWith("/") ? `${dest}${fileName}` : `${dest}/${fileName}`;
-
-    onMove(entry, fullPath);
+    onMove(entry, destination.trim());
   };
 
   const handleClose = (nextOpen: boolean) => {
@@ -101,26 +97,14 @@ export function MoveSheet({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label
-              htmlFor="move-destination"
-              className="block text-xs font-medium uppercase tracking-wider text-muted-foreground"
-            >
-              Destination directory
-            </label>
-            <Input
-              id="move-destination"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              placeholder="/path/to/destination/"
-              className="h-10 bg-muted/40 font-mono text-sm"
-              disabled={isBusy}
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground">
-              Absolute path on the server (e.g. /srv/files/archive/)
-            </p>
-          </div>
+          <DestinationPicker
+            currentPath={destination}
+            actualPath={actualPath}
+            currentEntries={currentEntries}
+            onNavigate={setDestination}
+            disabled={isBusy}
+            excludeEntry={entry}
+          />
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
