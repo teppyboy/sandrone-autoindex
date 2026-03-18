@@ -18,8 +18,12 @@ import {
 } from "lucide-react";
 
 import { AuthSheet } from "@/components/autoindex/AuthSheet";
+import { DeleteConfirmSheet } from "@/components/autoindex/DeleteConfirmSheet";
+import { EntryActions } from "@/components/autoindex/EntryActions";
 import { FileIcon } from "@/components/autoindex/FileIcon";
 import { MobileSearchSheet } from "@/components/autoindex/MobileSearchSheet";
+import { MoveSheet } from "@/components/autoindex/MoveSheet";
+import { RenameSheet } from "@/components/autoindex/RenameSheet";
 import { SettingsSheet } from "@/components/autoindex/SettingsSheet";
 import { UploadSheet } from "@/components/autoindex/UploadSheet";
 import { Button } from "@/components/ui/button";
@@ -52,14 +56,18 @@ import type { Palette, SortDir, SortKey, Theme, ViewMode } from "@/lib/types";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { cn } from "@/lib/utils";
 import {
+  buildResourceUrl,
   buildUploadUrl,
   checkResourceExists,
+  deleteResource,
+  moveResource,
   refreshAutoindexListing,
   uploadFile,
   WebDavError,
 } from "@/lib/webdav/client";
 import { useUploadQueue } from "@/lib/webdav/useUploadQueue";
 import { useWebDavSession } from "@/lib/webdav/useWebDavSession";
+import type { FileOperationStatus } from "@/lib/webdav/types";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "name", label: "Name" },
@@ -210,9 +218,13 @@ interface FileRowProps {
   entry: Entry;
   isMobile: boolean;
   showSize?: boolean;
+  isAuthenticated: boolean;
+  onRename: (entry: Entry) => void;
+  onMove: (entry: Entry) => void;
+  onDelete: (entry: Entry) => void;
 }
 
-function FileRow({ entry, isMobile, showSize = true }: FileRowProps) {
+function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, onMove, onDelete }: FileRowProps) {
   const isDirectory = entry.type === "directory";
   const sizeLabel = isDirectory
     ? null
@@ -221,101 +233,130 @@ function FileRow({ entry, isMobile, showSize = true }: FileRowProps) {
       : (entry.size ?? null);
 
   return (
-    <a
-      href={entry.href}
+    <div
       className={cn(
-        "group flex items-center gap-3 px-4 rounded-md hover:bg-muted/60 transition-colors text-sm no-underline",
+        "group flex items-center gap-3 px-4 rounded-md hover:bg-muted/60 transition-colors text-sm",
         isMobile ? "py-3" : "py-2.5",
       )}
     >
-      <FileIcon
-        name={entry.name}
-        isDir={isDirectory}
-        className={cn("shrink-0", isMobile ? "size-5" : "size-4.5")}
-        strokeWidth={1.5}
-      />
+      <a
+        href={entry.href}
+        className="flex flex-1 min-w-0 items-center gap-3 no-underline"
+      >
+        <FileIcon
+          name={entry.name}
+          isDir={isDirectory}
+          className={cn("shrink-0", isMobile ? "size-5" : "size-4.5")}
+          strokeWidth={1.5}
+        />
 
-      <span className="flex-1 min-w-0">
-        <span className="block truncate text-foreground group-hover:text-primary font-normal">
-          {entry.name}
-          {isDirectory && (
-            <span className="text-muted-foreground ml-0.5">/</span>
+        <span className="flex-1 min-w-0">
+          <span className="block truncate text-foreground group-hover:text-primary font-normal">
+            {entry.name}
+            {isDirectory && (
+              <span className="text-muted-foreground ml-0.5">/</span>
+            )}
+          </span>
+
+          {isMobile && (
+            <span className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[11px] text-muted-foreground">
+              {sizeLabel && <span className="shrink-0">{sizeLabel}</span>}
+              {sizeLabel && <span className="shrink-0">·</span>}
+              <span className="truncate">{formatMtime(entry.mtime)}</span>
+            </span>
           )}
         </span>
 
-        {isMobile && (
-          <span className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[11px] text-muted-foreground">
-            {sizeLabel && <span className="shrink-0">{sizeLabel}</span>}
-            {sizeLabel && <span className="shrink-0">·</span>}
-            <span className="truncate">{formatMtime(entry.mtime)}</span>
+        {!isMobile && (
+          <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
+            {formatMtime(entry.mtime)}
           </span>
         )}
-      </span>
 
-      {!isMobile && (
-        <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
-          {formatMtime(entry.mtime)}
-        </span>
-      )}
+        {!isMobile && showSize && (
+          <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
+            {isDirectory
+              ? "—"
+              : entry.rawSize != null
+                ? formatSizeBytes(entry.rawSize)
+                : (entry.size ?? "—")}
+          </span>
+        )}
 
-      {!isMobile && showSize && (
-        <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
-          {isDirectory
-            ? "—"
-            : entry.rawSize != null
-              ? formatSizeBytes(entry.rawSize)
-              : (entry.size ?? "—")}
-        </span>
-      )}
+        {isMobile && isDirectory && (
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+        )}
+      </a>
 
-      {isMobile && isDirectory && (
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+      {isAuthenticated && (
+        <EntryActions
+          entry={entry}
+          onRename={onRename}
+          onMove={onMove}
+          onDelete={onDelete}
+        />
       )}
-    </a>
+    </div>
   );
 }
 
 interface FileCardProps {
   entry: Entry;
   isMobile: boolean;
+  isAuthenticated: boolean;
+  onRename: (entry: Entry) => void;
+  onMove: (entry: Entry) => void;
+  onDelete: (entry: Entry) => void;
 }
 
-function FileCard({ entry, isMobile }: FileCardProps) {
+function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete }: FileCardProps) {
   return (
-    <a
-      href={entry.href}
+    <div
       className={cn(
-        "group flex flex-col items-center gap-2 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center no-underline",
+        "group relative flex flex-col items-center gap-2 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center",
         isMobile ? "p-3" : "p-4",
       )}
     >
-      <FileIcon
-        name={entry.name}
-        isDir={entry.type === "directory"}
-        className={cn("shrink-0", isMobile ? "size-7" : "size-8")}
-        strokeWidth={1.5}
-      />
+      {isAuthenticated && (
+        <div className="absolute top-1 right-1">
+          <EntryActions
+            entry={entry}
+            onRename={onRename}
+            onMove={onMove}
+            onDelete={onDelete}
+          />
+        </div>
+      )}
 
-      <span
-        className={cn(
-          "w-full text-xs text-foreground font-normal leading-snug group-hover:text-primary",
-          isMobile ? "line-clamp-2" : "truncate",
-        )}
-      >
-        {entry.name}
-        {entry.type === "directory" && (
-          <span className="text-muted-foreground">/</span>
-        )}
-      </span>
+      <a href={entry.href} className="flex flex-col items-center gap-2 no-underline">
+        <FileIcon
+          name={entry.name}
+          isDir={entry.type === "directory"}
+          className={cn("shrink-0", isMobile ? "size-7" : "size-8")}
+          strokeWidth={1.5}
+        />
 
-      <span className="mt-auto text-[10px] text-muted-foreground">
-        {entry.type === "directory"
-          ? "Folder"
-          : entry.rawSize != null
-            ? formatSizeBytes(entry.rawSize)
-            : (entry.size ?? "—")}
-      </span>
-    </a>
+        <span
+          className={cn(
+            "w-full text-xs text-foreground font-normal leading-snug group-hover:text-primary",
+            isMobile ? "line-clamp-2" : "truncate",
+          )}
+        >
+          {entry.name}
+          {entry.type === "directory" && (
+            <span className="text-muted-foreground">/</span>
+          )}
+        </span>
+
+        <span className="mt-auto text-[10px] text-muted-foreground">
+          {entry.type === "directory"
+            ? "Folder"
+            : entry.rawSize != null
+              ? formatSizeBytes(entry.rawSize)
+              : (entry.size ?? "—")}
+        </span>
+      </a>
+    </div>
   );
 }
 
@@ -567,6 +608,19 @@ export default function App() {
   const [uploadSheetOpen, setUploadSheetOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+
+  const [renameTarget, setRenameTarget] = useState<Entry | null>(null);
+  const [renameStatus, setRenameStatus] = useState<FileOperationStatus>("idle");
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  const [moveTarget, setMoveTarget] = useState<Entry | null>(null);
+  const [moveStatus, setMoveStatus] = useState<FileOperationStatus>("idle");
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<Entry | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<FileOperationStatus>("idle");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const preferredTheme = palette === "sandrone" ? "dark" : theme;
   const effectiveMobileSearchOpen = isMobile ? mobileSearchOpen : false;
   const effectiveUploadSheetOpen = isAuthenticated ? uploadSheetOpen : false;
@@ -963,6 +1017,101 @@ export default function App() {
     setUploading(false);
   };
 
+  const handleRename = async (entry: Entry, newName: string) => {
+    if (!authorization) return;
+
+    setRenameStatus("loading");
+    setRenameError(null);
+
+    try {
+      const sourceUrl = buildResourceUrl(entry.name);
+      const destUrl = buildResourceUrl(newName);
+      await moveResource(sourceUrl, destUrl, authorization);
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+
+      setRenameTarget(null);
+      setRenameStatus("idle");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The rename failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setRenameStatus("error");
+      setRenameError(message);
+    }
+  };
+
+  const handleMove = async (entry: Entry, destinationPath: string) => {
+    if (!authorization) return;
+
+    setMoveStatus("loading");
+    setMoveError(null);
+
+    try {
+      const sourceUrl = buildResourceUrl(entry.name);
+      const destUrl = new URL(destinationPath, window.location.origin).toString();
+      await moveResource(sourceUrl, destUrl, authorization);
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+
+      setMoveTarget(null);
+      setMoveStatus("idle");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The move operation failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setMoveStatus("error");
+      setMoveError(message);
+    }
+  };
+
+  const handleDelete = async (entry: Entry) => {
+    if (!authorization) return;
+
+    setDeleteStatus("loading");
+    setDeleteError(null);
+
+    try {
+      const targetUrl = buildResourceUrl(entry.name);
+      await deleteResource(targetUrl, authorization);
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+
+      setDeleteTarget(null);
+      setDeleteStatus("idle");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The delete operation failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setDeleteStatus("error");
+      setDeleteError(message);
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="autoindex-app flex min-h-screen flex-col bg-background text-foreground">
@@ -1219,7 +1368,7 @@ export default function App() {
           {view === "list" ? (
             <div className="flex flex-col gap-px">
               {sorted.map((entry) => (
-                <FileRow key={entry.href} entry={entry} isMobile={isMobile} />
+                <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} />
               ))}
             </div>
           ) : (
@@ -1232,7 +1381,7 @@ export default function App() {
               )}
             >
               {sorted.map((entry) => (
-                <FileCard key={entry.href} entry={entry} isMobile={isMobile} />
+                <FileCard key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} />
               ))}
             </div>
           )}
@@ -1339,6 +1488,55 @@ export default function App() {
         }}
         onClearFinished={clearFinished}
         onUploadAll={handleUploadAll}
+      />
+
+      <RenameSheet
+        key={`rename-${renameTarget?.name ?? "none"}`}
+        open={renameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenameTarget(null);
+            setRenameStatus("idle");
+            setRenameError(null);
+          }
+        }}
+        entry={renameTarget}
+        status={renameStatus}
+        error={renameError}
+        onRename={handleRename}
+      />
+
+      <MoveSheet
+        key={`move-${moveTarget?.name ?? "none"}`}
+        open={moveTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMoveTarget(null);
+            setMoveStatus("idle");
+            setMoveError(null);
+          }
+        }}
+        entry={moveTarget}
+        currentPath={path || "/"}
+        status={moveStatus}
+        error={moveError}
+        onMove={handleMove}
+      />
+
+      <DeleteConfirmSheet
+        key={`delete-${deleteTarget?.name ?? "none"}`}
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteStatus("idle");
+            setDeleteError(null);
+          }
+        }}
+        entry={deleteTarget}
+        status={deleteStatus}
+        error={deleteError}
+        onDelete={handleDelete}
       />
     </TooltipProvider>
   );

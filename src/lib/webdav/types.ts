@@ -59,3 +59,5 @@ export interface UploadItem {
   progress: number;
   message: string | null;
 }
+
+export type FileOperationStatus = "idle" | "loading" | "error";

@@ -46,6 +46,24 @@ export function buildUploadUrl(
   ).toString();
 }
 
+export function buildResourceUrl(
+  fileName: string,
+  currentHref: string = window.location.href,
+): string {
+  return new URL(
+    encodeURIComponent(fileName),
+    getCurrentDirectoryUrl(currentHref),
+  ).toString();
+}
+
+export function buildDestinationUrl(
+  targetPath: string,
+  currentOrigin: string = window.location.origin,
+): string {
+  const normalized = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
+  return new URL(normalized, currentOrigin).toString();
+}
+
 function responseSignalsWebDavSupport(response: Response): boolean {
   const allow = response.headers.get("Allow");
   const dav = response.headers.get("DAV");
@@ -363,6 +381,7 @@ export function getWebDavStatusMessage(status: number): string {
     return "Your WebDAV credentials were rejected. Sign in again to continue.";
   if (status === 403)
     return "This account cannot upload to the current directory.";
+  if (status === 404) return "The resource was not found.";
   if (status === 405 || status === 501)
     return "This server does not accept WebDAV uploads for the current directory.";
   if (status === 409)
@@ -372,4 +391,54 @@ export function getWebDavStatusMessage(status: number): string {
   if (status === 423) return "The target path is locked by the server.";
   if (status >= 500) return "The server failed while processing the upload.";
   return `The request failed with status ${status}.`;
+}
+
+export async function moveResource(
+  sourceUrl: string,
+  destinationUrl: string,
+  authorization: string,
+  overwrite: boolean = true,
+): Promise<void> {
+  const response = await fetch(sourceUrl, {
+    method: "MOVE",
+    headers: {
+      Authorization: authorization,
+      Destination: destinationUrl,
+      Overwrite: overwrite ? "T" : "F",
+    },
+    cache: "no-store",
+  }).catch(() => null);
+
+  if (!response) {
+    throw new WebDavError(
+      "The move operation failed due to a network error.",
+    );
+  }
+
+  if (response.status >= 200 && response.status < 300) return;
+
+  throw new WebDavError(getWebDavStatusMessage(response.status), response.status);
+}
+
+export async function deleteResource(
+  targetUrl: string,
+  authorization: string,
+): Promise<void> {
+  const response = await fetch(targetUrl, {
+    method: "DELETE",
+    headers: {
+      Authorization: authorization,
+    },
+    cache: "no-store",
+  }).catch(() => null);
+
+  if (!response) {
+    throw new WebDavError(
+      "The delete operation failed due to a network error.",
+    );
+  }
+
+  if (response.status >= 200 && response.status < 300) return;
+
+  throw new WebDavError(getWebDavStatusMessage(response.status), response.status);
 }

@@ -64,7 +64,7 @@ export function AuthSheet({
 
   const capabilityLabel =
     capability === "available"
-      ? "Uploads available"
+      ? "Full access available"
       : capability === "forbidden"
         ? "Read-only here"
         : capability === "unsupported"
