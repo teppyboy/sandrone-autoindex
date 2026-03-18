@@ -3,7 +3,9 @@ import {
   ArrowUpDown,
   ChevronRight,
   CircleAlert,
+  FilePlus,
   FolderOpen,
+  FolderPlus,
   House,
   LoaderCircle,
   MoreHorizontal,
@@ -18,6 +20,8 @@ import {
 } from "lucide-react";
 
 import { AuthSheet } from "@/components/autoindex/AuthSheet";
+import { CreateFileSheet } from "@/components/autoindex/CreateFileSheet";
+import { CreateFolderSheet } from "@/components/autoindex/CreateFolderSheet";
 import { DeleteConfirmSheet } from "@/components/autoindex/DeleteConfirmSheet";
 import { DropOverlay } from "@/components/autoindex/DropOverlay";
 import { EntryActions } from "@/components/autoindex/EntryActions";
@@ -58,8 +62,9 @@ import { useIsMobile } from "@/lib/useIsMobile";
 import { cn } from "@/lib/utils";
 import {
   buildResourceUrl,
-  buildUploadUrl,
   checkResourceExists,
+  createDirectory,
+  createEmptyFile,
   deleteResource,
   moveResource,
   refreshAutoindexListing,
@@ -752,6 +757,16 @@ export default function App() {
   const [draggedEntry, setDraggedEntry] = useState<Entry | null>(null);
   const [osDragCounter, setOsDragCounter] = useState(0);
 
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [createFolderStatus, setCreateFolderStatus] = useState<FileOperationStatus>("idle");
+  const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+
+  const [createFileOpen, setCreateFileOpen] = useState(false);
+  const [createFileStatus, setCreateFileStatus] = useState<FileOperationStatus>("idle");
+  const [createFileError, setCreateFileError] = useState<string | null>(null);
+
+  const [uploadDestination, setUploadDestination] = useState<string>("");
+
   const preferredTheme = palette === "sandrone" ? "dark" : theme;
   const effectiveMobileSearchOpen = isMobile ? mobileSearchOpen : false;
   const effectiveUploadSheetOpen = isAuthenticated ? uploadSheetOpen : false;
@@ -1022,6 +1037,7 @@ export default function App() {
 
   const handleFilesSelected = (files: FileList | File[]) => {
     setUploadMessage(null);
+    setUploadDestination(path || "/");
     addFiles(files);
 
     if (!isMobile) {
@@ -1046,7 +1062,12 @@ export default function App() {
     let shouldRefresh = false;
 
     for (const item of queuedItems) {
-      const targetUrl = buildUploadUrl(item.file.name);
+      const dest = uploadDestination || path || "/";
+      const dirUrl = new URL(
+        dest.endsWith("/") ? dest : dest + "/",
+        window.location.origin,
+      ).toString();
+      const targetUrl = new URL(encodeURIComponent(item.file.name), dirUrl).toString();
 
       updateItem(item.id, {
         status: "checking",
@@ -1310,6 +1331,68 @@ export default function App() {
     handleFilesSelected(files);
   };
 
+  const handleCreateFolder = async (name: string) => {
+    if (!authorization) return;
+
+    setCreateFolderStatus("loading");
+    setCreateFolderError(null);
+
+    try {
+      const targetUrl = buildResourceUrl(name.endsWith("/") ? name : name + "/");
+      await createDirectory(targetUrl, authorization);
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+
+      setCreateFolderOpen(false);
+      setCreateFolderStatus("idle");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The folder creation failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setCreateFolderStatus("error");
+      setCreateFolderError(message);
+    }
+  };
+
+  const handleCreateFile = async (name: string) => {
+    if (!authorization) return;
+
+    setCreateFileStatus("loading");
+    setCreateFileError(null);
+
+    try {
+      const targetUrl = buildResourceUrl(name);
+      await createEmptyFile(targetUrl, authorization);
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+
+      setCreateFileOpen(false);
+      setCreateFileStatus("idle");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The file creation failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setCreateFileStatus("error");
+      setCreateFileError(message);
+    }
+  };
+
   return (
     <TooltipProvider>
       <div
@@ -1444,6 +1527,32 @@ export default function App() {
 
             <div className="flex-1" />
 
+            {isAuthenticated && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("shrink-0", isMobile ? "px-2.5" : undefined)}
+                onClick={() => setCreateFolderOpen(true)}
+                disabled={!canUseUpload}
+              >
+                <FolderPlus className="size-4" />
+                {!isMobile && "New Folder"}
+              </Button>
+            )}
+
+            {isAuthenticated && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("shrink-0", isMobile ? "px-2.5" : undefined)}
+                onClick={() => setCreateFileOpen(true)}
+                disabled={!canUseUpload}
+              >
+                <FilePlus className="size-4" />
+                {!isMobile && "New File"}
+              </Button>
+            )}
+
             {uploadButton}
 
             {isMobile && (
@@ -1484,6 +1593,14 @@ export default function App() {
           {shouldShowWebDavUi &&
             isAuthenticated &&
             uploadItems.length > 0 &&
+            uploadItems.some(
+              (item) =>
+                item.status === "pending" ||
+                item.status === "conflict" ||
+                item.status === "error" ||
+                item.status === "checking" ||
+                item.status === "uploading",
+            ) &&
             !uploadSheetOpen && (
               <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
                 <div className="min-w-0 flex-1">
@@ -1553,14 +1670,32 @@ export default function App() {
                 shouldShowWebDavUi &&
                 isAuthenticated &&
                 canUseUpload && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setUploadSheetOpen(true)}
-                  >
-                    <Upload className="size-4" />
-                    Upload first file
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreateFolderOpen(true)}
+                    >
+                      <FolderPlus className="size-4" />
+                      New Folder
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreateFileOpen(true)}
+                    >
+                      <FilePlus className="size-4" />
+                      New File
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setUploadSheetOpen(true)}
+                    >
+                      <Upload className="size-4" />
+                      Upload first file
+                    </Button>
+                  </div>
                 )}
               {search && (
                 <Button variant="ghost" size="sm" onClick={() => setSearch("")}>
@@ -1674,13 +1809,18 @@ export default function App() {
 
       <UploadSheet
         open={effectiveUploadSheetOpen && shouldShowWebDavUi}
-        onOpenChange={setUploadSheetOpen}
-        currentPath={path || "/"}
+        onOpenChange={(open) => {
+          setUploadSheetOpen(open);
+          if (!open) setUploadDestination("");
+        }}
+        currentPath={uploadDestination || path || "/"}
+        actualPath={path || "/"}
         items={uploadItems}
         overwriteExisting={overwriteExisting}
         disabled={!canUseUpload || !authorization}
         busy={uploading}
         message={authMessage}
+        currentEntries={visibleEntries}
         onOverwriteChange={(checked) => {
           setOverwriteExisting(checked);
           setUploadMessage(null);
@@ -1693,6 +1833,7 @@ export default function App() {
         }}
         onClearFinished={clearFinished}
         onUploadAll={handleUploadAll}
+        onDestinationChange={setUploadDestination}
       />
 
       <RenameSheet
@@ -1742,6 +1883,36 @@ export default function App() {
         status={deleteStatus}
         error={deleteError}
         onDelete={handleDelete}
+      />
+
+      <CreateFolderSheet
+        open={createFolderOpen}
+        onOpenChange={(open) => {
+          setCreateFolderOpen(open);
+          if (!open) {
+            setCreateFolderStatus("idle");
+            setCreateFolderError(null);
+          }
+        }}
+        currentPath={path || "/"}
+        status={createFolderStatus}
+        error={createFolderError}
+        onCreate={handleCreateFolder}
+      />
+
+      <CreateFileSheet
+        open={createFileOpen}
+        onOpenChange={(open) => {
+          setCreateFileOpen(open);
+          if (!open) {
+            setCreateFileStatus("idle");
+            setCreateFileError(null);
+          }
+        }}
+        currentPath={path || "/"}
+        status={createFileStatus}
+        error={createFileError}
+        onCreate={handleCreateFile}
       />
     </TooltipProvider>
   );

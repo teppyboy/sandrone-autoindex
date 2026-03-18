@@ -1,4 +1,4 @@
-import { parseAutoindex, type ParsedIndex } from "@/lib/parser";
+import { parseAutoindex, type Entry, type ParsedIndex } from "@/lib/parser";
 import type {
   WebDavAuthCheckResult,
   WebDavProbeResult,
@@ -310,6 +310,34 @@ export async function refreshAutoindexListing(): Promise<ParsedIndex> {
   return parsed;
 }
 
+export async function fetchDirectoryListing(
+  directoryUrl: string,
+): Promise<Entry[]> {
+  const url = new URL(directoryUrl, window.location.origin);
+  if (!url.pathname.endsWith("/")) {
+    url.pathname += "/";
+  }
+
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new WebDavError(
+      `Failed to fetch directory listing (${response.status}).`,
+      response.status,
+    );
+  }
+
+  const html = await response.text();
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const parsed = parseAutoindex(doc);
+
+  if (!parsed) return [];
+
+  return parsed.entries;
+}
+
 export async function checkResourceExists(targetUrl: string): Promise<boolean> {
   const response = await fetch(targetUrl, {
     method: "HEAD",
@@ -435,6 +463,61 @@ export async function deleteResource(
   if (!response) {
     throw new WebDavError(
       "The delete operation failed due to a network error.",
+    );
+  }
+
+  if (response.status >= 200 && response.status < 300) return;
+
+  throw new WebDavError(getWebDavStatusMessage(response.status), response.status);
+}
+
+export async function createDirectory(
+  targetUrl: string,
+  authorization: string,
+): Promise<void> {
+  const response = await fetch(targetUrl, {
+    method: "MKCOL",
+    headers: {
+      Authorization: authorization,
+    },
+    cache: "no-store",
+  }).catch(() => null);
+
+  if (!response) {
+    throw new WebDavError(
+      "The folder creation failed due to a network error.",
+    );
+  }
+
+  if (response.status >= 200 && response.status < 300) return;
+
+  if (response.status === 405) {
+    throw new WebDavError(
+      "A resource with this name already exists.",
+      response.status,
+    );
+  }
+
+  throw new WebDavError(getWebDavStatusMessage(response.status), response.status);
+}
+
+export async function createEmptyFile(
+  targetUrl: string,
+  authorization: string,
+): Promise<void> {
+  const response = await fetch(targetUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: authorization,
+      "Content-Type": "text/plain",
+    },
+    body: "",
+    cache: "no-store",
+  }).catch(() => null);
+
+  if (!response) {
+    throw new WebDavError(
+      "The file creation failed due to a network error.",
     );
   }
 
