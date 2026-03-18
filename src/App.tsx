@@ -313,10 +313,10 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
         <button
           type="button"
           className={cn(
-            "entry-checkbox shrink-0 flex items-center justify-center size-4 rounded border border-border bg-background transition-colors",
+            "entry-checkbox size-4 flex items-center justify-center rounded bg-background",
             selected
               ? "bg-primary border-primary text-primary-foreground"
-              : "hover:border-ring",
+              : "border-border hover:border-ring",
           )}
           onClick={(e) => {
             e.preventDefault();
@@ -479,10 +479,10 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
           <button
             type="button"
             className={cn(
-              "entry-checkbox absolute top-1 left-1 flex items-center justify-center size-5 rounded border border-border bg-background transition-colors",
+              "entry-checkbox absolute top-1 left-1 size-5 flex items-center justify-center rounded bg-background",
               selected
                 ? "bg-primary border-primary text-primary-foreground"
-                : "hover:border-ring",
+                : "border-border hover:border-ring",
             )}
             onClick={(e) => {
               e.preventDefault();

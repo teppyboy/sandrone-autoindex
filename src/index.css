@@ -313,17 +313,28 @@ body:has(#autoindex-root) > html {
 
 /* ══════════════════════════════════════════════════════════════════════════
    MULTI-SELECT CHECKBOXES
-   Show checkboxes on hover or when item is selected.
+   Show checkboxes on hover or when item is selected. Uses max-width to
+   collapse to zero width so there is no layout shift when not hovered.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* Checkbox hidden by default, visible on parent hover or when selected */
+/* Checkbox collapsed by default, expands on parent hover or when selected */
 .entry-checkbox {
+  max-width: 0;
   opacity: 0;
-  transition: opacity 150ms ease;
+  overflow: hidden;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  transition: max-width 150ms ease, opacity 150ms ease;
 }
 .entry-row:hover .entry-checkbox,
 .entry-row.entry-selected .entry-checkbox {
+  max-width: 1.5rem;
   opacity: 1;
+  border-color: oklch(0.55 0 0);
+}
+.dark .entry-row:hover .entry-checkbox,
+.dark .entry-row.entry-selected .entry-checkbox {
+  border-color: oklch(0.75 0 0);
 }
 
 /* Selected row highlight */
@@ -337,10 +348,20 @@ body:has(#autoindex-root) > html {
   background: color-mix(in oklch, var(--primary) 8%, transparent);
 }
 .entry-card .entry-checkbox {
+  max-width: 0;
   opacity: 0;
-  transition: opacity 150ms ease;
+  overflow: hidden;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  transition: max-width 150ms ease, opacity 150ms ease;
 }
 .entry-card:hover .entry-checkbox,
 .entry-card.entry-selected .entry-checkbox {
+  max-width: 1.5rem;
   opacity: 1;
+  border-color: oklch(0.55 0 0);
+}
+.dark .entry-card:hover .entry-checkbox,
+.dark .entry-card.entry-selected .entry-checkbox {
+  border-color: oklch(0.75 0 0);
 }
