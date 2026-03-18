@@ -112,6 +112,15 @@ body:has(#autoindex-root) > html {
 .breadcrumb-scroll {
   scrollbar-width: thin;
 }
+
+/* Smooth navigation transition */
+.autoindex-content {
+  transition: opacity 100ms ease;
+}
+.autoindex-content.navigating {
+  opacity: 0.5;
+  pointer-events: none;
+}
 .breadcrumb-scroll::-webkit-scrollbar {
   width: 6px;
 }

@@ -236,9 +236,10 @@ interface FileRowProps {
   draggedEntry: Entry | null;
   selected: boolean;
   onToggleSelect: (href: string) => void;
+  onNavigate: (href: string) => void;
 }
 
-function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry, selected, onToggleSelect }: FileRowProps) {
+function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry, selected, onToggleSelect, onNavigate }: FileRowProps) {
   const isDirectory = entry.type === "directory";
   const isDragging = draggedEntry?.href === entry.href;
   const isDropTarget = isDirectory && draggedEntry !== null && draggedEntry.href !== entry.href;
@@ -333,7 +334,11 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
         href={entry.href}
         className="flex flex-1 min-w-0 items-center gap-3 no-underline"
         onClick={(e) => {
-          if (isDragging) e.preventDefault();
+          if (isDragging) { e.preventDefault(); return; }
+          if (isDirectory) {
+            e.preventDefault();
+            onNavigate(entry.href);
+          }
         }}
       >
         <FileIcon
@@ -406,9 +411,10 @@ interface FileCardProps {
   draggedEntry: Entry | null;
   selected: boolean;
   onToggleSelect: (href: string) => void;
+  onNavigate: (href: string) => void;
 }
 
-function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry, selected, onToggleSelect }: FileCardProps) {
+function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry, selected, onToggleSelect, onNavigate }: FileCardProps) {
   const isDirectory = entry.type === "directory";
   const isDragging = draggedEntry?.href === entry.href;
   const isDropTarget = isDirectory && draggedEntry !== null && draggedEntry.href !== entry.href;
@@ -506,7 +512,11 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
 
       <a href={entry.href} className="flex flex-col items-center gap-2 no-underline"
         onClick={(e) => {
-          if (isDragging) e.preventDefault();
+          if (isDragging) { e.preventDefault(); return; }
+          if (entry.type === "directory") {
+            e.preventDefault();
+            onNavigate(entry.href);
+          }
         }}
       >
         <FileIcon
@@ -544,6 +554,7 @@ interface BreadcrumbNavProps {
   segments: BreadcrumbSegment[];
   isMobile?: boolean;
   className?: string;
+  onNavigate: (href: string) => void;
 }
 
 type BreadcrumbDisplayItem =
@@ -559,8 +570,10 @@ type BreadcrumbDisplayItem =
 
 function BreadcrumbOverflowMenu({
   segments,
+  onNavigate,
 }: {
   segments: BreadcrumbSegment[];
+  onNavigate: (href: string) => void;
 }) {
   return (
     <DropdownMenu>
@@ -584,7 +597,7 @@ function BreadcrumbOverflowMenu({
             className="items-start py-2"
             title={segment.label}
             onClick={() => {
-              window.location.assign(segment.href);
+              onNavigate(segment.href);
             }}
           >
             <span className="whitespace-normal [overflow-wrap:anywhere]">
@@ -601,12 +614,14 @@ interface BreadcrumbSegmentItemProps {
   segment: BreadcrumbSegment;
   isLast: boolean;
   isMobile: boolean;
+  onNavigate: (href: string) => void;
 }
 
 function BreadcrumbSegmentItem({
   segment,
   isLast,
   isMobile,
+  onNavigate,
 }: BreadcrumbSegmentItemProps) {
   const isRoot = segment.href === "/";
   const desktopLabelClassName =
@@ -636,6 +651,10 @@ function BreadcrumbSegmentItem({
       href={segment.href}
       className="inline-flex min-h-5 items-center text-muted-foreground transition-colors hover:text-foreground no-underline"
       aria-label="Root"
+      onClick={(e) => {
+        e.preventDefault();
+        onNavigate(segment.href);
+      }}
     >
       <House className="size-3.5" />
     </a>
@@ -647,6 +666,10 @@ function BreadcrumbSegmentItem({
         isMobile ? mobileLabelClassName : desktopLabelClassName,
       )}
       title={isMobile ? undefined : segment.label}
+      onClick={(e) => {
+        e.preventDefault();
+        onNavigate(segment.href);
+      }}
     >
       {segment.label}
     </a>
@@ -657,6 +680,7 @@ function BreadcrumbNav({
   segments,
   isMobile = false,
   className,
+  onNavigate,
 }: BreadcrumbNavProps) {
   const displayItems: BreadcrumbDisplayItem[] =
     !isMobile && segments.length > 4
@@ -716,12 +740,13 @@ function BreadcrumbNav({
             )}
 
             {item.type === "overflow" ? (
-              <BreadcrumbOverflowMenu segments={item.segments} />
+              <BreadcrumbOverflowMenu segments={item.segments} onNavigate={onNavigate} />
             ) : (
               <BreadcrumbSegmentItem
                 segment={item.segment}
                 isLast={item.isLast}
                 isMobile={isMobile}
+                onNavigate={onNavigate}
               />
             )}
           </span>
@@ -823,9 +848,57 @@ export default function App() {
   const [batchDeleteStatus, setBatchDeleteStatus] = useState<FileOperationStatus>("idle");
   const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
 
+  const [navigating, setNavigating] = useState(false);
+
   const preferredTheme = palette === "sandrone" ? "dark" : theme;
   const effectiveMobileSearchOpen = isMobile ? mobileSearchOpen : false;
   const effectiveUploadSheetOpen = isAuthenticated ? uploadSheetOpen : false;
+
+  const navigateToDirectory = async (href: string, replace?: boolean) => {
+    setNavigating(true);
+
+    try {
+      const response = await fetch(href, { cache: "no-store" });
+      if (!response.ok) {
+        window.location.assign(href);
+        return;
+      }
+
+      const html = await response.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const parsed = parseAutoindex(doc);
+
+      if (!parsed) {
+        window.location.assign(href);
+        return;
+      }
+
+      setEntries(parsed.entries);
+      setPath(parsed.path);
+      setSearch("");
+      setSelectedHrefs(new Set());
+
+      if (replace) {
+        window.history.replaceState({}, "", href);
+      } else {
+        window.history.pushState({}, "", href);
+      }
+
+      window.scrollTo(0, 0);
+    } catch {
+      window.location.assign(href);
+    }
+
+    setNavigating(false);
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      void navigateToDirectory(window.location.href, true);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle(
@@ -1618,6 +1691,7 @@ export default function App() {
                   segments={segments}
                   isMobile
                   className="max-h-24"
+                  onNavigate={navigateToDirectory}
                 />
               </div>
             </>
@@ -1634,7 +1708,7 @@ export default function App() {
               </div>
 
               <div className="min-w-0 flex-1">
-                <BreadcrumbNav segments={segments} />
+                <BreadcrumbNav segments={segments} onNavigate={navigateToDirectory} />
               </div>
 
               {renderSearchField("w-64 shrink-0")}
@@ -1755,7 +1829,7 @@ export default function App() {
         </div>
         )}
 
-        <main className="mx-auto flex-1 w-full max-w-7xl px-4 py-4">
+        <main className={cn("mx-auto flex-1 w-full max-w-7xl px-4 py-4 autoindex-content", navigating && "navigating")}>
           {visibleNotice && (
             <div className="mb-4 flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <CircleAlert className="mt-0.5 size-4 shrink-0" />
@@ -1770,6 +1844,10 @@ export default function App() {
                 "mb-1 flex items-center gap-3 rounded-md px-4 text-sm transition-colors hover:bg-muted/60 no-underline",
                 isMobile ? "py-3" : "py-2.5",
               )}
+              onClick={(e) => {
+                e.preventDefault();
+                navigateToDirectory(upHref);
+              }}
             >
               <FolderOpen
                 className={cn(
@@ -1900,7 +1978,7 @@ export default function App() {
           {view === "list" ? (
             <div className="flex flex-col gap-px">
               {sorted.map((entry) => (
-                <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} />
+                <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} onNavigate={navigateToDirectory} />
               ))}
             </div>
           ) : (
@@ -1913,7 +1991,7 @@ export default function App() {
               )}
             >
               {sorted.map((entry) => (
-                <FileCard key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} />
+                <FileCard key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} onNavigate={navigateToDirectory} />
               ))}
             </div>
           )}
