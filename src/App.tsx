@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpDown,
+  Check,
   ChevronRight,
   CircleAlert,
   FilePlus,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { AuthSheet } from "@/components/autoindex/AuthSheet";
+import { BulkActionBar } from "@/components/autoindex/BulkActionBar";
 import { CreateFileSheet } from "@/components/autoindex/CreateFileSheet";
 import { CreateFolderSheet } from "@/components/autoindex/CreateFolderSheet";
 import { DeleteConfirmSheet } from "@/components/autoindex/DeleteConfirmSheet";
@@ -232,9 +234,11 @@ interface FileRowProps {
   onDragEnd?: () => void;
   onMoveToDirectory?: (sourceEntry: Entry, targetDir: Entry) => void;
   draggedEntry: Entry | null;
+  selected: boolean;
+  onToggleSelect: (href: string) => void;
 }
 
-function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry }: FileRowProps) {
+function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry, selected, onToggleSelect }: FileRowProps) {
   const isDirectory = entry.type === "directory";
   const isDragging = draggedEntry?.href === entry.href;
   const isDropTarget = isDirectory && draggedEntry !== null && draggedEntry.href !== entry.href;
@@ -291,10 +295,11 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 px-4 rounded-md hover:bg-muted/60 transition-colors text-sm",
+        "group entry-row flex items-center gap-3 px-4 rounded-md hover:bg-muted/60 transition-colors text-sm",
         isMobile ? "py-3" : "py-2.5",
         isDragging && "dragging",
         isDropTarget && "drag-over-directory",
+        selected && "entry-selected",
       )}
       draggable={isAuthenticated}
       onDragStart={handleRowDragStart}
@@ -304,6 +309,26 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
       onDragLeave={handleDirDragLeave}
       onDrop={handleDirDrop}
     >
+      {isAuthenticated && (
+        <button
+          type="button"
+          className={cn(
+            "entry-checkbox shrink-0 flex items-center justify-center size-4 rounded border border-border bg-background transition-colors",
+            selected
+              ? "bg-primary border-primary text-primary-foreground"
+              : "hover:border-ring",
+          )}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleSelect(entry.href);
+          }}
+          aria-label={selected ? `Deselect ${entry.name}` : `Select ${entry.name}`}
+        >
+          {selected && <Check className="size-3" strokeWidth={2.5} />}
+        </button>
+      )}
+
       <a
         href={entry.href}
         className="flex flex-1 min-w-0 items-center gap-3 no-underline"
@@ -379,9 +404,11 @@ interface FileCardProps {
   onDragEnd?: () => void;
   onMoveToDirectory?: (sourceEntry: Entry, targetDir: Entry) => void;
   draggedEntry: Entry | null;
+  selected: boolean;
+  onToggleSelect: (href: string) => void;
 }
 
-function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry }: FileCardProps) {
+function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete, onDragStart, onDragEnd, onMoveToDirectory, draggedEntry, selected, onToggleSelect }: FileCardProps) {
   const isDirectory = entry.type === "directory";
   const isDragging = draggedEntry?.href === entry.href;
   const isDropTarget = isDirectory && draggedEntry !== null && draggedEntry.href !== entry.href;
@@ -433,10 +460,11 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
   return (
     <div
       className={cn(
-        "group relative flex flex-col items-center gap-2 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center",
+        "group entry-card relative flex flex-col items-center gap-2 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center",
         isMobile ? "p-3" : "p-4",
         isDragging && "dragging",
         isDropTarget && "drag-over-directory",
+        selected && "entry-selected",
       )}
       draggable={isAuthenticated}
       onDragStart={handleCardDragStart}
@@ -447,14 +475,33 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
       onDrop={handleDirDrop}
     >
       {isAuthenticated && (
-        <div className="absolute top-1 right-1">
-          <EntryActions
-            entry={entry}
-            onRename={onRename}
-            onMove={onMove}
-            onDelete={onDelete}
-          />
-        </div>
+        <>
+          <button
+            type="button"
+            className={cn(
+              "entry-checkbox absolute top-1 left-1 flex items-center justify-center size-5 rounded border border-border bg-background transition-colors",
+              selected
+                ? "bg-primary border-primary text-primary-foreground"
+                : "hover:border-ring",
+            )}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect(entry.href);
+            }}
+            aria-label={selected ? `Deselect ${entry.name}` : `Select ${entry.name}`}
+          >
+            {selected && <Check className="size-3" strokeWidth={2.5} />}
+          </button>
+          <div className="absolute top-1 right-1">
+            <EntryActions
+              entry={entry}
+              onRename={onRename}
+              onMove={onMove}
+              onDelete={onDelete}
+            />
+          </div>
+        </>
       )}
 
       <a href={entry.href} className="flex flex-col items-center gap-2 no-underline"
@@ -767,6 +814,15 @@ export default function App() {
 
   const [uploadDestination, setUploadDestination] = useState<string>("");
 
+  const [selectedHrefs, setSelectedHrefs] = useState<Set<string>>(new Set());
+  const [selectionPath, setSelectionPath] = useState(path || "/");
+  const [batchMoveTarget, setBatchMoveTarget] = useState<Entry | null>(null);
+  const [batchMoveStatus, setBatchMoveStatus] = useState<FileOperationStatus>("idle");
+  const [batchMoveError, setBatchMoveError] = useState<string | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [batchDeleteStatus, setBatchDeleteStatus] = useState<FileOperationStatus>("idle");
+  const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
+
   const preferredTheme = palette === "sandrone" ? "dark" : theme;
   const effectiveMobileSearchOpen = isMobile ? mobileSearchOpen : false;
   const effectiveUploadSheetOpen = isAuthenticated ? uploadSheetOpen : false;
@@ -878,6 +934,40 @@ export default function App() {
     () => sortEntries(filtered, sortKey, sortDir),
     [filtered, sortDir, sortKey],
   );
+
+  const effectiveHrefs = useMemo(
+    () => (selectionPath === (path || "/") ? selectedHrefs : new Set<string>()),
+    [selectionPath, path, selectedHrefs],
+  );
+  const hasSelection = effectiveHrefs.size > 0;
+  const selectedEntries = useMemo(
+    () => sorted.filter((e) => effectiveHrefs.has(e.href)),
+    [sorted, effectiveHrefs],
+  );
+  const allSelected =
+    sorted.length > 0 && effectiveHrefs.size === sorted.length;
+
+  const toggleSelect = (href: string) => {
+    setSelectedHrefs((prev) => {
+      const next = new Set(prev);
+      if (next.has(href)) {
+        next.delete(href);
+      } else {
+        next.add(href);
+      }
+      return next;
+    });
+    setSelectionPath(path || "/");
+  };
+
+  const selectAll = () => {
+    setSelectedHrefs(new Set(sorted.map((e) => e.href)));
+    setSelectionPath(path || "/");
+  };
+
+  const clearSelection = () => {
+    setSelectedHrefs(new Set());
+  };
 
   const dirCount = useMemo(
     () => visibleEntries.filter((entry) => entry.type === "directory").length,
@@ -1397,6 +1487,90 @@ export default function App() {
     }
   };
 
+  const handleBatchMove = async (destinationDir: string) => {
+    if (!authorization || selectedEntries.length === 0) return;
+
+    setBatchMoveStatus("loading");
+    setBatchMoveError(null);
+
+    try {
+      const dirUrl = new URL(
+        destinationDir.endsWith("/") ? destinationDir : destinationDir + "/",
+        window.location.origin,
+      ).toString();
+
+      for (const entry of selectedEntries) {
+        const sourceUrl = buildResourceUrl(entry.name);
+        const destUrl = new URL(encodeURIComponent(entry.name), dirUrl).toString();
+        await moveResource(sourceUrl, destUrl, authorization);
+      }
+
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+
+      clearSelection();
+      setBatchMoveTarget(null);
+      setBatchMoveStatus("idle");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The batch move failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setBatchMoveStatus("error");
+      setBatchMoveError(message);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (!authorization || selectedEntries.length === 0) return;
+
+    setBatchDeleteStatus("loading");
+    setBatchDeleteError(null);
+
+    try {
+      for (const entry of selectedEntries) {
+        const targetUrl = buildResourceUrl(entry.name);
+        await deleteResource(targetUrl, authorization);
+      }
+
+      markWriteSuccess();
+
+      const refreshed = await refreshAutoindexListing();
+      setEntries(refreshed.entries);
+      setPath(refreshed.path);
+
+      clearSelection();
+      setBatchDeleteOpen(false);
+      setBatchDeleteStatus("idle");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The batch delete failed.";
+      const status = error instanceof WebDavError ? error.status : undefined;
+
+      if (status != null) {
+        handleWriteFailure(status);
+      }
+
+      setBatchDeleteStatus("error");
+      setBatchDeleteError(message);
+    }
+  };
+
+  const handleBatchDownload = () => {
+    for (const entry of selectedEntries) {
+      if (entry.type === "file") {
+        window.open(entry.href, "_blank");
+      }
+    }
+  };
+
   return (
     <TooltipProvider>
       <div
@@ -1469,6 +1643,19 @@ export default function App() {
           )}
         </header>
 
+        {hasSelection ? (
+          <BulkActionBar
+            selectedCount={effectiveHrefs.size}
+            totalCount={sorted.length}
+            allSelected={allSelected}
+            onSelectAll={selectAll}
+            onDeselectAll={clearSelection}
+            onBatchMove={() => setBatchMoveTarget(selectedEntries[0] ?? null)}
+            onBatchDelete={() => setBatchDeleteOpen(true)}
+            onDownload={handleBatchDownload}
+            isMobile={isMobile}
+          />
+        ) : (
         <div className="controls-bar border-b border-border bg-background/80 backdrop-blur">
           <div className="mx-auto flex h-10 max-w-7xl items-center gap-2.5 px-4">
             <DropdownMenu>
@@ -1566,6 +1753,7 @@ export default function App() {
             )}
           </div>
         </div>
+        )}
 
         <main className="mx-auto flex-1 w-full max-w-7xl px-4 py-4">
           {visibleNotice && (
@@ -1712,7 +1900,7 @@ export default function App() {
           {view === "list" ? (
             <div className="flex flex-col gap-px">
               {sorted.map((entry) => (
-                <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} />
+                <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} />
               ))}
             </div>
           ) : (
@@ -1725,7 +1913,7 @@ export default function App() {
               )}
             >
               {sorted.map((entry) => (
-                <FileCard key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} />
+                <FileCard key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} />
               ))}
             </div>
           )}
@@ -1919,6 +2107,53 @@ export default function App() {
         status={createFileStatus}
         error={createFileError}
         onCreate={handleCreateFile}
+      />
+
+      {/* Batch Move */}
+      <MoveSheet
+        key={`batch-move-${batchMoveTarget?.name ?? "none"}`}
+        open={batchMoveTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBatchMoveTarget(null);
+            setBatchMoveStatus("idle");
+            setBatchMoveError(null);
+          }
+        }}
+        entry={batchMoveTarget}
+        currentPath={path || "/"}
+        actualPath={path || "/"}
+        currentEntries={visibleEntries}
+        status={batchMoveStatus}
+        error={batchMoveError}
+        onMove={(_, destinationDir) => handleBatchMove(destinationDir)}
+      />
+
+      {/* Batch Delete */}
+      <DeleteConfirmSheet
+        open={batchDeleteOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBatchDeleteOpen(false);
+            setBatchDeleteStatus("idle");
+            setBatchDeleteError(null);
+          }
+        }}
+        entry={
+          selectedEntries.length > 0
+            ? {
+                name: `${selectedEntries.length} item${selectedEntries.length === 1 ? "" : "s"}`,
+                href: "",
+                type: "file",
+                mtime: "",
+                size: null,
+                rawSize: null,
+              }
+            : null
+        }
+        status={batchDeleteStatus}
+        error={batchDeleteError}
+        onDelete={() => handleBatchDelete()}
       />
     </TooltipProvider>
   );
