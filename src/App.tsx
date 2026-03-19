@@ -68,6 +68,7 @@ import {
   createDirectory,
   createEmptyFile,
   deleteResource,
+  getCurrentDirectoryUrl,
   moveResource,
   refreshAutoindexListing,
   uploadFile,
@@ -1325,12 +1326,25 @@ export default function App() {
       }
     }
 
-    if (!uploadMessage) {
+  if (!uploadMessage) {
       setUploadMessage(formatUploadMessage(uploadedCount, hadFailure));
     }
 
     setUploading(false);
   };
+
+  const getEntrySourceUrl = (entry: Entry) =>
+    new URL(entry.href, window.location.origin).toString();
+
+  const getEntryDestinationUrl = (
+    name: string,
+    type: Entry["type"],
+    directoryUrl: string = getCurrentDirectoryUrl().toString(),
+  ) =>
+    new URL(
+      `${encodeURIComponent(name)}${type === "directory" ? "/" : ""}`,
+      directoryUrl,
+    ).toString();
 
   const handleRename = async (entry: Entry, newName: string) => {
     if (!authorization) return;
@@ -1339,8 +1353,8 @@ export default function App() {
     setRenameError(null);
 
     try {
-      const sourceUrl = buildResourceUrl(entry.name);
-      const destUrl = buildResourceUrl(newName);
+      const sourceUrl = getEntrySourceUrl(entry);
+      const destUrl = getEntryDestinationUrl(newName, entry.type);
       await moveResource(sourceUrl, destUrl, authorization);
       markWriteSuccess();
 
@@ -1371,12 +1385,12 @@ export default function App() {
     setMoveError(null);
 
     try {
-      const sourceUrl = buildResourceUrl(entry.name);
+      const sourceUrl = getEntrySourceUrl(entry);
       const dirUrl = new URL(
         destinationDir.endsWith("/") ? destinationDir : destinationDir + "/",
         window.location.origin,
       ).toString();
-      const destUrl = new URL(encodeURIComponent(entry.name), dirUrl).toString();
+      const destUrl = getEntryDestinationUrl(entry.name, entry.type, dirUrl);
       await moveResource(sourceUrl, destUrl, authorization);
       markWriteSuccess();
 
@@ -1407,7 +1421,7 @@ export default function App() {
     setDeleteError(null);
 
     try {
-      const targetUrl = buildResourceUrl(entry.name);
+      const targetUrl = getEntrySourceUrl(entry);
       await deleteResource(targetUrl, authorization);
       markWriteSuccess();
 
@@ -1435,17 +1449,18 @@ export default function App() {
     if (!authorization) return;
 
     try {
-      const sourceUrl = buildResourceUrl(sourceEntry.name);
+      const sourceUrl = getEntrySourceUrl(sourceEntry);
       const targetDirUrl = new URL(
         encodeURIComponent(targetDir.name) + "/",
         new URL(window.location.href.endsWith("/")
           ? window.location.href
           : window.location.href + "/"),
       ).toString();
-      const destUrl = new URL(
-        encodeURIComponent(sourceEntry.name),
+      const destUrl = getEntryDestinationUrl(
+        sourceEntry.name,
+        sourceEntry.type,
         targetDirUrl,
-      ).toString();
+      );
       await moveResource(sourceUrl, destUrl, authorization);
       markWriteSuccess();
 
@@ -1573,8 +1588,8 @@ export default function App() {
       ).toString();
 
       for (const entry of selectedEntries) {
-        const sourceUrl = buildResourceUrl(entry.name);
-        const destUrl = new URL(encodeURIComponent(entry.name), dirUrl).toString();
+        const sourceUrl = getEntrySourceUrl(entry);
+        const destUrl = getEntryDestinationUrl(entry.name, entry.type, dirUrl);
         await moveResource(sourceUrl, destUrl, authorization);
       }
 
@@ -1609,7 +1624,7 @@ export default function App() {
 
     try {
       for (const entry of selectedEntries) {
-        const targetUrl = buildResourceUrl(entry.name);
+        const targetUrl = getEntrySourceUrl(entry);
         await deleteResource(targetUrl, authorization);
       }
 
@@ -1799,6 +1814,7 @@ export default function App() {
                 className={cn("shrink-0", isMobile ? "px-2.5" : undefined)}
                 onClick={() => setCreateFolderOpen(true)}
                 disabled={!canUseUpload}
+                aria-label="New Folder"
               >
                 <FolderPlus className="size-4" />
                 {!isMobile && "New Folder"}
@@ -1812,6 +1828,7 @@ export default function App() {
                 className={cn("shrink-0", isMobile ? "px-2.5" : undefined)}
                 onClick={() => setCreateFileOpen(true)}
                 disabled={!canUseUpload}
+                aria-label="New File"
               >
                 <FilePlus className="size-4" />
                 {!isMobile && "New File"}
