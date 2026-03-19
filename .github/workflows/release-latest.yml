@@ -1,0 +1,113 @@
+name: Release Latest
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-latest
+  cancel-in-progress: true
+
+jobs:
+  release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build app
+        run: bun run build
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release/_autoindex
+          cp -R dist/. release/_autoindex/
+          (cd release && zip -r ../sandrone-autoindex-latest.zip _autoindex)
+          sha256sum sandrone-autoindex-latest.zip > sandrone-autoindex-latest.zip.sha256
+          printf 'COMMIT_SUBJECT=%s\n' "$(git log -1 --pretty=%s)" >> "$GITHUB_ENV"
+          printf 'SHORT_SHA=%s\n' "$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-notes.md <<EOF
+          Automated release for the latest successful \`master\` commit.
+
+          - Commit: \`${{ github.event.workflow_run.head_sha }}\`
+          - Short SHA: \`${SHORT_SHA}\`
+          - Message: ${COMMIT_SUBJECT}
+          - CI run: ${{ github.event.workflow_run.html_url }}
+
+          Archive contents:
+          - \`_autoindex/before.html\`
+          - \`_autoindex/after.html\`
+          - \`_autoindex/assets/*\`
+          EOF
+
+      - name: Remove previous latest release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'latest';
+
+            try {
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tag}`,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Publish rolling latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
+          name: Latest
+          body_path: release-notes.md
+          files: |
+            sandrone-autoindex-latest.zip
+            sandrone-autoindex-latest.zip.sha256
+          make_latest: true
