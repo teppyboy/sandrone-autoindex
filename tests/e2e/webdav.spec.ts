@@ -105,9 +105,7 @@ async function createFolder(page: Page, folderName: string) {
   await page.getByLabel("Folder name").fill(folderName);
   await page.getByRole("button", { name: "Create Folder" }).click();
 
-  await expect(page.getByRole("heading", { name: "New Folder" })).not.toBeVisible({
-    timeout: 10000,
-  });
+  await expectSheetToClose(page, "New Folder");
   await expect(page.getByRole("link", { name: folderName })).toBeVisible({
     timeout: 5000,
   });
@@ -117,4 +115,20 @@ async function openEntryActions(page: Page, name: string) {
   const row = entryRow(page, name);
   await row.hover();
   await row.getByRole("button", { name: `Actions for ${name}` }).click();
+}
+
+async function expectSheetToClose(page: Page, headingName: string) {
+  const dialog = page.getByRole("dialog", { name: headingName });
+  const errorText = dialog.locator(".text-destructive span").first();
+
+  try {
+    await expect(dialog).not.toBeVisible({ timeout: 10000 });
+  } catch (error) {
+    if (await errorText.isVisible().catch(() => false)) {
+      const message = (await errorText.textContent())?.trim() ?? "Unknown WebDAV error";
+      throw new Error(`${headingName} failed: ${message}`);
+    }
+
+    throw error;
+  }
 }

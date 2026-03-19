@@ -36,6 +36,11 @@ export function prepareSite(): string {
 
   copyDir(distSource, autoindexDest);
 
+  // Dockerized nginx needs to mutate the mounted test site for WebDAV flows.
+  // On Linux CI runners, bind-mounted files keep host permissions, so make the
+  // generated test tree world-writable for this disposable temp directory.
+  ensureWritableForDocker(siteRoot);
+
   // Copy nginx config and htpasswd
   const nginxConfigTemplate = path.join(
     projectRoot,
@@ -51,6 +56,27 @@ export function prepareSite(): string {
   console.log(`✓ Site prepared at ${tempRoot}`);
 
   return tempRoot;
+}
+
+function ensureWritableForDocker(root: string) {
+  if (process.platform === "win32") return;
+  chmodRecursive(root);
+}
+
+function chmodRecursive(targetPath: string) {
+  const stats = fs.statSync(targetPath);
+
+  if (stats.isDirectory()) {
+    fs.chmodSync(targetPath, 0o777);
+
+    for (const entry of fs.readdirSync(targetPath)) {
+      chmodRecursive(path.join(targetPath, entry));
+    }
+
+    return;
+  }
+
+  fs.chmodSync(targetPath, 0o666);
 }
 
 function copyDir(src: string, dest: string) {
