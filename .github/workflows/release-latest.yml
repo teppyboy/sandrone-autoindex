@@ -68,36 +68,36 @@ jobs:
           - \`_autoindex/assets/*\`
           EOF
 
-      - name: Remove previous latest release
+      - name: Upsert latest tag
         uses: actions/github-script@v7
         with:
           script: |
             const tag = 'latest';
+            const sha = '${{ github.event.workflow_run.head_sha }}';
 
             try {
-              const release = await github.rest.repos.getReleaseByTag({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag,
-              });
-
-              await github.rest.repos.deleteRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release.data.id,
-              });
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-
-            try {
-              await github.rest.git.deleteRef({
+              await github.rest.git.getRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: `tags/${tag}`,
               });
+
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tag}`,
+                sha,
+                force: true,
+              });
             } catch (error) {
               if (error.status !== 404) throw error;
+
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/tags/${tag}`,
+                sha,
+              });
             }
 
       - name: Publish rolling latest release
@@ -110,4 +110,5 @@ jobs:
           files: |
             sandrone-autoindex-latest.zip
             sandrone-autoindex-latest.zip.sha256
+          overwrite_files: true
           make_latest: true
