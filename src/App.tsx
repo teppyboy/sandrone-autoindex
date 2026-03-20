@@ -1334,7 +1334,7 @@ export default function App() {
   };
 
   const getEntrySourceUrl = (entry: Entry) =>
-    new URL(entry.href, window.location.origin).toString();
+    new URL(entry.href, getCurrentDirectoryUrl().toString()).toString();
 
   const getEntryDestinationUrl = (
     name: string,
@@ -1584,7 +1584,7 @@ export default function App() {
     try {
       const dirUrl = new URL(
         destinationDir.endsWith("/") ? destinationDir : destinationDir + "/",
-        window.location.origin,
+        getCurrentDirectoryUrl().toString(),
       ).toString();
 
       for (const entry of selectedEntries) {
