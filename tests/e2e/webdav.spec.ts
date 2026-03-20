@@ -85,7 +85,7 @@ test.describe("WebDAV Operations", () => {
 
     await expect(page.getByRole("heading", { name: "Move" })).toBeVisible();
     await page.getByRole("button", { name: "docs" }).click();
-    await page.getByRole("button", { name: "Move" }).click();
+    await page.getByRole("button", { name: "Move", exact: true }).click();
 
     await expect(page.getByRole("heading", { name: "Move" })).not.toBeVisible({
       timeout: 10000,
