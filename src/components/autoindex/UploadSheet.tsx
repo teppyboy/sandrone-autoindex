@@ -255,7 +255,7 @@ export function UploadSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="bottom"
-          className="flex h-dvh max-h-dvh flex-col rounded-none"
+          className="flex h-dvh max-h-dvh flex-col gap-0 rounded-none"
           showCloseButton={false}
         >
           {/* Mobile drag handle */}
