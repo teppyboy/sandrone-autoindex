@@ -317,7 +317,7 @@ export function UploadSheet({
           </div>
 
           {/* Scrollable queue */}
-          <div className="min-h-0 flex-1 px-4">{queueContent}</div>
+          <div className="min-h-0 flex-1 px-4 flex flex-col">{queueContent}</div>
 
           {/* Fixed bottom button */}
           <div className="shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
