@@ -36,13 +36,13 @@ export function BulkActionBar({
   const someSelected = selectedCount > 0 && !allSelected;
 
   return (
-    <div className="controls-bar border-b border-border bg-primary/5 backdrop-blur">
-      <div className="mx-auto flex h-10 max-w-7xl items-center gap-2 px-4">
+    <div className="controls-bar border-b border-primary/20 bg-primary/8 backdrop-blur">
+      <div className="mx-auto flex h-12 max-w-7xl items-center gap-2 px-4">
         {/* Select all checkbox */}
         <button
           type="button"
           onClick={allSelected ? onDeselectAll : onSelectAll}
-          className="flex size-5 shrink-0 items-center justify-center rounded border border-border bg-background text-muted-foreground hover:text-foreground transition-colors"
+          className="flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-background text-primary transition-colors hover:bg-primary/10"
           aria-label={allSelected ? "Deselect all" : "Select all"}
         >
           {allSelected ? (
@@ -55,7 +55,7 @@ export function BulkActionBar({
         {/* Count */}
         <span className="shrink-0 text-sm font-medium text-foreground">
           {selectedCount}{" "}
-          <span className="text-muted-foreground">of {totalCount}</span>
+          <span className="text-muted-foreground">of {totalCount} selected</span>
         </span>
 
         <div className="flex-1" />
@@ -65,10 +65,11 @@ export function BulkActionBar({
           <TooltipTrigger
             className={cn(
               buttonVariants({ variant: "ghost", size: isMobile ? "icon-sm" : "sm" }),
-              "shrink-0 gap-1.5",
+              "shrink-0 gap-1.5 rounded-full",
             )}
             onClick={busy ? undefined : onBatchMove}
             disabled={busy}
+            aria-label="Move selected"
           >
             <FolderInput className="size-4" />
             {!isMobile && "Move"}
@@ -81,10 +82,11 @@ export function BulkActionBar({
           <TooltipTrigger
             className={cn(
               buttonVariants({ variant: "ghost", size: isMobile ? "icon-sm" : "sm" }),
-              "shrink-0 gap-1.5 text-destructive hover:text-destructive",
+              "shrink-0 gap-1.5 rounded-full text-destructive hover:text-destructive",
             )}
             onClick={busy ? undefined : onBatchDelete}
             disabled={busy}
+            aria-label="Delete selected"
           >
             <Trash2 className="size-4" />
             {!isMobile && "Delete"}
@@ -97,10 +99,11 @@ export function BulkActionBar({
           <TooltipTrigger
             className={cn(
               buttonVariants({ variant: "ghost", size: isMobile ? "icon-sm" : "sm" }),
-              "shrink-0 gap-1.5",
+              "shrink-0 gap-1.5 rounded-full",
             )}
             onClick={busy ? undefined : onDownload}
             disabled={busy}
+            aria-label="Download selected files"
           >
             <Download className="size-4" />
             {!isMobile && "Download"}
@@ -113,7 +116,7 @@ export function BulkActionBar({
           <TooltipTrigger
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon-sm" }),
-              "shrink-0",
+              "shrink-0 rounded-full",
             )}
             onClick={onDeselectAll}
             aria-label="Clear selection"

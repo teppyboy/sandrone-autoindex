@@ -87,6 +87,11 @@ location / {
 }
 ```
 
+Browser sign-in uses Basic Auth and stores the generated `Authorization` header
+in session storage, or local storage when "remember me" is enabled. Serve
+untrusted user HTML/JS from a separate origin, or force downloads/sandboxing with
+strict response headers, so same-origin files cannot read those credentials.
+
 ### Anubis integration
 
 Too hard, you should figure out yourself, but TL;DR follow the Anubis setup guide and add WebDAV methods to bypass Anubis and go directly to the backend server.

@@ -1,5 +1,5 @@
 import { LoaderCircle, LogOut, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Checkbox, CheckboxLabel } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -55,12 +55,13 @@ export function AuthSheet({
   const isBusy =
     sessionStatus === "authenticating" || sessionStatus === "verifying";
 
-  useEffect(() => {
-    if (!open) return;
-    setUsernameValue(username ?? "");
-    setRememberValue(remember);
-    setPasswordValue("");
-  }, [open, username, remember]);
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setPasswordValue("");
+    }
+
+    onOpenChange(nextOpen);
+  };
 
   const capabilityLabel =
     capability === "available"
@@ -81,7 +82,7 @@ export function AuthSheet({
         : "Sign in";
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side={isMobile ? "bottom" : "right"}
         className={cn(
@@ -137,7 +138,7 @@ export function AuthSheet({
 
                 if (success) {
                   setPasswordValue("");
-                  onOpenChange(false);
+                  handleOpenChange(false);
                 }
               }}
             >
@@ -218,7 +219,10 @@ export function AuthSheet({
               variant="outline"
               size="lg"
               className="w-full"
-              onClick={onSignOut}
+              onClick={() => {
+                setPasswordValue("");
+                onSignOut();
+              }}
             >
               <LogOut className="size-4" />
               Sign out

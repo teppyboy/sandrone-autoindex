@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
@@ -73,6 +74,9 @@ export function SettingsSheet({
 
         <SheetHeader>
           <SheetTitle>Settings</SheetTitle>
+          <SheetDescription>
+            Adjust the file view, color theme, and Sandrone background.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="px-4 pb-6 space-y-6">
@@ -82,8 +86,10 @@ export function SettingsSheet({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
               Layout
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" role="group" aria-label="Layout">
               <button
+                type="button"
+                aria-pressed={view === 'list'}
                 onClick={() => onViewChange('list')}
                 className={cn(
                   'flex flex-1 items-center justify-center gap-2 h-9 rounded-md border text-sm transition-colors',
@@ -96,6 +102,8 @@ export function SettingsSheet({
                 List
               </button>
               <button
+                type="button"
+                aria-pressed={view === 'grid'}
                 onClick={() => onViewChange('grid')}
                 className={cn(
                   'flex flex-1 items-center justify-center gap-2 h-9 rounded-md border text-sm transition-colors',
@@ -115,8 +123,10 @@ export function SettingsSheet({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
               Appearance
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" role="group" aria-label="Appearance">
               <button
+                type="button"
+                aria-pressed={theme === 'light'}
                 onClick={() => onThemeChange('light')}
                 className={cn(
                   'flex flex-1 items-center justify-center gap-2 h-9 rounded-md border text-sm transition-colors',
@@ -129,6 +139,8 @@ export function SettingsSheet({
                 Light
               </button>
               <button
+                type="button"
+                aria-pressed={theme === 'dark'}
                 onClick={() => onThemeChange('dark')}
                 className={cn(
                   'flex flex-1 items-center justify-center gap-2 h-9 rounded-md border text-sm transition-colors',
@@ -148,12 +160,14 @@ export function SettingsSheet({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
               Color
             </p>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-2" role="group" aria-label="Color palette">
               {PALETTES.map(p => (
                 <button
+                  type="button"
                   key={p.id}
                   onClick={() => onPaletteChange(p.id)}
                   title={p.label}
+                  aria-pressed={palette === p.id}
                   className={cn(
                     'flex flex-col items-center gap-1.5 p-2 rounded-lg border text-[11px] transition-colors',
                     palette === p.id
@@ -181,12 +195,16 @@ export function SettingsSheet({
             <div className="space-y-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <label
+                    htmlFor="sandrone-bg-brightness"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                  >
                     Background brightness
-                  </p>
+                  </label>
                   <span className="text-xs tabular-nums text-muted-foreground">{bgBrightness}%</span>
                 </div>
                 <input
+                  id="sandrone-bg-brightness"
                   type="range"
                   min={10}
                   max={100}
@@ -199,12 +217,16 @@ export function SettingsSheet({
 
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <label
+                    htmlFor="sandrone-bg-blur"
+                    className="text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                  >
                     Background blur
-                  </p>
+                  </label>
                   <span className="text-xs tabular-nums text-muted-foreground">{bgBlur}px</span>
                 </div>
                 <input
+                  id="sandrone-bg-blur"
                   type="range"
                   min={0}
                   max={16}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDown,
   Check,
@@ -11,7 +11,6 @@ import {
   LoaderCircle,
   MoreHorizontal,
   Search,
-  Server,
   Settings,
   SortAsc,
   SortDesc,
@@ -155,17 +154,17 @@ function readStoredViewMode(): ViewMode {
 
 function readStoredTheme(): Theme {
   try {
-    return (localStorage.getItem("sandrone-theme") as Theme) ?? "dark";
+    return (localStorage.getItem("sandrone-theme") as Theme) ?? "light";
   } catch {
-    return "dark";
+    return "light";
   }
 }
 
 function readStoredPalette(): Palette {
   try {
-    return (localStorage.getItem("sandrone-palette") as Palette) ?? "neutral";
+    return (localStorage.getItem("sandrone-palette") as Palette) ?? "blue";
   } catch {
-    return "neutral";
+    return "blue";
   }
 }
 
@@ -313,7 +312,7 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
   return (
     <div
       className={cn(
-        "group entry-row flex items-center gap-3 px-4 rounded-md hover:bg-muted/60 transition-colors text-sm",
+        "group entry-row flex items-center gap-3 rounded-xl px-3 text-sm transition-colors hover:bg-primary/5 focus-within:bg-primary/5",
         isMobile ? "py-3" : "py-2.5",
         isDragging && "dragging",
         isDropTarget && "drag-over-directory",
@@ -331,7 +330,7 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
         <button
           type="button"
           className={cn(
-            "entry-checkbox size-4 flex items-center justify-center rounded bg-background",
+            "entry-checkbox size-5 flex items-center justify-center rounded-full bg-background shadow-sm",
             selected
               ? "bg-primary border-primary text-primary-foreground"
               : "border-border hover:border-ring",
@@ -366,7 +365,7 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
         />
 
         <span className="flex-1 min-w-0">
-          <span className="block truncate text-foreground group-hover:text-primary font-normal">
+          <span className="block truncate font-medium text-foreground group-hover:text-primary">
             {entry.name}
             {isDirectory && (
               <span className="text-muted-foreground ml-0.5">/</span>
@@ -483,7 +482,7 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
   return (
     <div
       className={cn(
-        "group entry-card relative flex flex-col items-center gap-2 rounded-lg border border-border hover:border-ring/40 hover:bg-muted/40 transition-all text-center",
+        "group entry-card relative flex min-h-32 flex-col items-center gap-2 rounded-2xl border border-border/70 bg-background text-center shadow-sm transition-all hover:border-primary/30 hover:bg-primary/5 hover:shadow-md focus-within:border-primary/30 focus-within:bg-primary/5",
         isMobile ? "p-3" : "p-4",
         isDragging && "dragging",
         isDropTarget && "drag-over-directory",
@@ -502,7 +501,7 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
           <button
             type="button"
             className={cn(
-              "entry-checkbox absolute top-1 left-1 size-5 flex items-center justify-center rounded bg-background",
+              "entry-checkbox absolute left-2 top-2 size-5 flex items-center justify-center rounded-full bg-background shadow-sm",
               selected
                 ? "bg-primary border-primary text-primary-foreground"
                 : "border-border hover:border-ring",
@@ -516,7 +515,7 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
           >
             {selected && <Check className="size-3" strokeWidth={2.5} />}
           </button>
-          <div className="absolute top-1 right-1">
+          <div className="absolute right-2 top-2">
             <EntryActions
               entry={entry}
               onRename={onRename}
@@ -545,7 +544,7 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
 
         <span
           className={cn(
-            "w-full text-xs text-foreground font-normal leading-snug group-hover:text-primary",
+            "w-full text-xs font-medium leading-snug text-foreground group-hover:text-primary",
             isMobile ? "line-clamp-2" : "truncate",
           )}
         >
@@ -866,18 +865,23 @@ export default function App() {
   const [batchDeleteError, setBatchDeleteError] = useState<string | null>(null);
 
   const [navigating, setNavigating] = useState(false);
+  const navigationRequestIdRef = useRef(0);
 
   const preferredTheme = palette === "sandrone" ? "dark" : theme;
   const effectiveMobileSearchOpen = isMobile ? mobileSearchOpen : false;
   const effectiveUploadSheetOpen = isAuthenticated ? uploadSheetOpen : false;
 
   const navigateToDirectory = async (href: string, replace?: boolean) => {
+    const requestId = navigationRequestIdRef.current + 1;
+    navigationRequestIdRef.current = requestId;
     setNavigating(true);
 
     try {
       const response = await fetch(href, { cache: "no-store" });
       if (!response.ok) {
-        window.location.assign(href);
+        if (navigationRequestIdRef.current === requestId) {
+          window.location.assign(href);
+        }
         return;
       }
 
@@ -886,9 +890,13 @@ export default function App() {
       const parsed = parseAutoindex(doc);
 
       if (!parsed) {
-        window.location.assign(href);
+        if (navigationRequestIdRef.current === requestId) {
+          window.location.assign(href);
+        }
         return;
       }
+
+      if (navigationRequestIdRef.current !== requestId) return;
 
       setEntries(parsed.entries);
       setPath(parsed.path);
@@ -903,10 +911,14 @@ export default function App() {
 
       window.scrollTo(0, 0);
     } catch {
-      window.location.assign(href);
+      if (navigationRequestIdRef.current === requestId) {
+        window.location.assign(href);
+      }
+    } finally {
+      if (navigationRequestIdRef.current === requestId) {
+        setNavigating(false);
+      }
     }
-
-    setNavigating(false);
   };
 
   useEffect(() => {
@@ -1031,11 +1043,11 @@ export default function App() {
   );
   const hasSelection = effectiveHrefs.size > 0;
   const selectedEntries = useMemo(
-    () => sorted.filter((e) => effectiveHrefs.has(e.href)),
-    [sorted, effectiveHrefs],
+    () => visibleEntries.filter((e) => effectiveHrefs.has(e.href)),
+    [visibleEntries, effectiveHrefs],
   );
   const allSelected =
-    sorted.length > 0 && effectiveHrefs.size === sorted.length;
+    sorted.length > 0 && sorted.every((entry) => effectiveHrefs.has(entry.href));
 
   const toggleSelect = (href: string) => {
     setSelectedHrefs((prev) => {
@@ -1091,6 +1103,7 @@ export default function App() {
     isAuthenticated &&
     capability !== "forbidden" &&
     capability !== "unsupported";
+  const canAcceptFileDrops = canUseUpload && capability !== "checking" && !uploading;
   const uploadButtonDisabled =
     uploading || capability === "checking" || !canUseUpload;
   const visibleNotice =
@@ -1103,18 +1116,19 @@ export default function App() {
 
   const renderSearchField = (className?: string) => (
     <div className={cn("relative", className)}>
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
+        aria-label="Search files"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
-        placeholder="Filter files…"
-        className="h-8 border-input/60 bg-muted/40 pl-8 text-sm focus-visible:bg-background"
+        placeholder="Search in this folder"
+        className="h-10 rounded-full border-transparent bg-muted/80 pl-11 pr-10 text-sm shadow-none focus-visible:bg-background"
       />
 
       {search && (
         <button
           onClick={() => setSearch("")}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Clear search"
         >
           <X className="size-3.5" />
@@ -1178,7 +1192,7 @@ export default function App() {
       <Button
         variant="outline"
         size="sm"
-        className={cn("shrink-0", isMobile ? "px-2.5" : undefined)}
+        className={cn("shrink-0 rounded-full", isMobile ? "px-2.5" : undefined)}
         onClick={() => setUploadSheetOpen(true)}
         disabled={uploadButtonDisabled}
       >
@@ -1216,6 +1230,11 @@ export default function App() {
   }
 
   const handleFilesSelected = (files: FileList | File[]) => {
+    if (!canUseUpload) {
+      setUploadMessage("Sign in with write access before uploading files.");
+      return;
+    }
+
     setUploadMessage(null);
     setUploadDestination(path || "/");
     addFiles(files);
@@ -1506,12 +1525,14 @@ export default function App() {
 
   const handleGlobalDragEnter = (e: React.DragEvent) => {
     if (draggedEntry) return;
+    if (!canAcceptFileDrops) return;
     if (!e.dataTransfer.types.includes("Files")) return;
     setOsDragCounter((c) => c + 1);
   };
 
   const handleGlobalDragOver = (e: React.DragEvent) => {
     if (draggedEntry) return;
+    if (!canAcceptFileDrops) return;
     if (!e.dataTransfer.types.includes("Files")) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
@@ -1530,6 +1551,8 @@ export default function App() {
     if (!e.dataTransfer.types.includes("Files")) return;
     e.preventDefault();
     setOsDragCounter(0);
+
+    if (!canAcceptFileDrops) return;
 
     const files = e.dataTransfer.files;
     if (files.length === 0) return;
@@ -1700,24 +1723,23 @@ export default function App() {
   return (
     <TooltipProvider>
       <div
-        className="autoindex-app flex min-h-screen flex-col bg-background text-foreground"
+        className="autoindex-app flex min-h-screen flex-col bg-muted/20 text-foreground"
         onDragEnter={handleGlobalDragEnter}
         onDragOver={handleGlobalDragOver}
         onDragLeave={handleGlobalDragLeave}
         onDrop={handleGlobalDrop}
       >
         <DropOverlay visible={osDragCounter > 0} />
-        <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
+        <header className="sticky top-0 z-10 border-b border-border/70 bg-background/95 shadow-sm backdrop-blur">
           {isMobile ? (
             <>
-              <div className="mx-auto flex h-12 max-w-7xl items-center gap-3 px-4">
+              <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <Server
-                    className="size-4.5 shrink-0 text-muted-foreground"
-                    strokeWidth={1.5}
-                  />
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <FolderOpen className="size-4.5" strokeWidth={1.7} />
+                  </span>
                   <span className="truncate text-sm font-semibold tracking-tight text-foreground">
-                    Sandrone
+                    Sandrone Drive
                   </span>
                 </div>
 
@@ -1739,7 +1761,7 @@ export default function App() {
                 {headerAccountControl}
               </div>
 
-              <div className="breadcrumb-scroll mx-auto max-w-7xl overflow-y-auto overflow-x-hidden pl-5 pr-4 pt-2 pb-3">
+              <div className="breadcrumb-scroll mx-auto max-w-7xl overflow-y-auto overflow-x-hidden px-4 pb-3 pt-1">
                 <BreadcrumbNav
                   segments={segments}
                   isMobile
@@ -1749,22 +1771,21 @@ export default function App() {
               </div>
             </>
           ) : (
-            <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
+            <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
               <div className="flex shrink-0 items-center gap-2">
-                <Server
-                  className="size-4.5 text-muted-foreground"
-                  strokeWidth={1.5}
-                />
-                <span className="text-sm font-semibold tracking-tight text-foreground">
-                  Sandrone
+                <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <FolderOpen className="size-5" strokeWidth={1.7} />
+                </span>
+                <span className="text-base font-semibold tracking-tight text-foreground">
+                  Sandrone Drive
                 </span>
               </div>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 px-2">
                 <BreadcrumbNav segments={segments} onNavigate={navigateToDirectory} />
               </div>
 
-              {renderSearchField("w-64 shrink-0")}
+              {renderSearchField("w-80 shrink-0")}
               {headerAccountControl}
             </div>
           )}
@@ -1773,7 +1794,7 @@ export default function App() {
         {hasSelection ? (
           <BulkActionBar
             selectedCount={effectiveHrefs.size}
-            totalCount={sorted.length}
+            totalCount={visibleEntries.length}
             allSelected={allSelected}
             onSelectAll={selectAll}
             onDeselectAll={clearSelection}
@@ -1783,13 +1804,13 @@ export default function App() {
             isMobile={isMobile}
           />
         ) : (
-        <div className="controls-bar border-b border-border bg-background/80 backdrop-blur">
-          <div className="mx-auto flex h-10 max-w-7xl items-center gap-2.5 px-4">
+          <div className="controls-bar border-b border-border/70 bg-background/90 backdrop-blur">
+            <div className="mx-auto flex h-12 max-w-7xl items-center gap-2.5 px-4">
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
                   buttonVariants({ variant: "ghost", size: "sm" }),
-                  "gap-1.5 px-2 text-muted-foreground hover:text-foreground",
+                  "gap-1.5 rounded-full px-3 text-muted-foreground hover:text-foreground",
                 )}
               >
                 <ArrowUpDown className="size-3.5" />
@@ -1823,7 +1844,7 @@ export default function App() {
               <TooltipTrigger
                 className={cn(
                   buttonVariants({ variant: "ghost", size: "icon" }),
-                  "size-8 shrink-0",
+                  "size-9 shrink-0 rounded-full",
                 )}
                 onClick={() =>
                   setSortDir((currentDir) =>
@@ -1849,7 +1870,7 @@ export default function App() {
               <Button
                 variant="outline"
                 size="sm"
-                className={cn("shrink-0", isMobile ? "px-2.5" : undefined)}
+                className={cn("shrink-0 rounded-full", isMobile ? "px-2.5" : undefined)}
                 onClick={() => setCreateFolderOpen(true)}
                 disabled={!canUseUpload}
                 aria-label="New Folder"
@@ -1863,7 +1884,7 @@ export default function App() {
               <Button
                 variant="outline"
                 size="sm"
-                className={cn("shrink-0", isMobile ? "px-2.5" : undefined)}
+                className={cn("shrink-0 rounded-full", isMobile ? "px-2.5" : undefined)}
                 onClick={() => setCreateFileOpen(true)}
                 disabled={!canUseUpload}
                 aria-label="New File"
@@ -1880,13 +1901,13 @@ export default function App() {
                 {sorted.length} item{sorted.length !== 1 ? "s" : ""}
               </span>
             )}
+            </div>
           </div>
-        </div>
         )}
 
-        <main className={cn("mx-auto flex-1 w-full max-w-7xl px-4 py-4 autoindex-content", navigating && "navigating")}>
+        <main className={cn("autoindex-content mx-auto w-full max-w-7xl flex-1 px-4 py-5", navigating && "navigating")}>
           {visibleNotice && (
-            <div className="mb-4 flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground shadow-sm">
               <CircleAlert className="mt-0.5 size-4 shrink-0" />
               <span>{visibleNotice}</span>
             </div>
@@ -1896,7 +1917,7 @@ export default function App() {
             <a
               href={upHref}
               className={cn(
-                "mb-1 flex items-center gap-3 rounded-md px-4 text-sm transition-colors hover:bg-muted/60 no-underline",
+                "mb-2 flex items-center gap-3 rounded-xl px-3 text-sm transition-colors hover:bg-primary/5 no-underline",
                 isMobile ? "py-3" : "py-2.5",
               )}
               onClick={(e) => {
@@ -1927,7 +1948,7 @@ export default function App() {
                 item.status === "uploading",
             ) &&
             !uploadSheetOpen && (
-              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-background px-4 py-3 shadow-sm">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">
                     Upload queue ready
@@ -1951,7 +1972,7 @@ export default function App() {
             )}
 
           {!isMobile && view === "list" && sorted.length > 0 && (
-            <div className="mb-0.5 flex items-center gap-3 px-4 py-1.5">
+            <div className="mb-1 flex items-center gap-3 px-3 py-1.5">
               <span className="w-4.5 shrink-0" />
 
               <SortButton
@@ -1984,9 +2005,11 @@ export default function App() {
           )}
 
           {sorted.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
-              <FolderOpen className="size-10 opacity-30" strokeWidth={1} />
-              <p className="text-sm">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-border/80 bg-background/70 py-24 text-muted-foreground">
+              <span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <FolderOpen className="size-7" strokeWidth={1.4} />
+              </span>
+              <p className="text-sm font-medium text-foreground">
                 {search
                   ? `No files match "${search}"`
                   : "This directory is empty"}
@@ -2031,7 +2054,7 @@ export default function App() {
           )}
 
           {view === "list" ? (
-            <div className="flex flex-col gap-px">
+            <div className="flex flex-col gap-1 rounded-2xl border border-border/70 bg-background p-1.5 shadow-sm">
               {sorted.map((entry) => (
                 <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} onNavigate={navigateToDirectory} />
               ))}
@@ -2039,7 +2062,7 @@ export default function App() {
           ) : (
             <div
               className={cn(
-                "grid gap-2",
+                "grid gap-3",
                 isMobile
                   ? "grid-cols-2"
                   : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8",

@@ -2,7 +2,13 @@ import { Search, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 
 interface MobileSearchSheetProps {
   open: boolean
@@ -24,11 +30,16 @@ export function MobileSearchSheet({
         showCloseButton={false}
         className="rounded-b-2xl px-4 pt-3 pb-4"
       >
+        <SheetHeader className="sr-only">
+          <SheetTitle>Search files</SheetTitle>
+          <SheetDescription>Filter the current directory by name.</SheetDescription>
+        </SheetHeader>
         <div className="mx-auto max-w-7xl">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                aria-label="Search files"
                 type="search"
                 autoFocus
                 value={search}
