@@ -181,6 +181,22 @@ function formatUploadMessage(count: number, hadFailure: boolean): string {
     : `Uploaded ${count} file${count === 1 ? "" : "s"} successfully.`;
 }
 
+function getInvalidEntryNameMessage(name: string): string | null {
+  const trimmed = name.trim();
+
+  if (!trimmed) return "Enter a name.";
+  if (trimmed === "." || trimmed === "..") return "Name cannot be '.' or '..'.";
+  if (/[\\/]/.test(trimmed)) return "Name cannot contain slashes.";
+  for (const char of trimmed) {
+    const code = char.charCodeAt(0);
+    if (code < 32 || code === 127) {
+      return "Name cannot contain control characters.";
+    }
+  }
+
+  return null;
+}
+
 interface SortButtonProps {
   label: string;
   sortKey: SortKey;
@@ -1224,6 +1240,7 @@ export default function App() {
     let uploadedCount = 0;
     let hadFailure = false;
     let shouldRefresh = false;
+    let nextUploadMessage: string | null = null;
 
     for (const item of queuedItems) {
       const dest = uploadDestination || path || "/";
@@ -1243,7 +1260,7 @@ export default function App() {
 
       try {
         if (!overwriteExisting) {
-          const exists = await checkResourceExists(targetUrl);
+          const exists = await checkResourceExists(targetUrl, authorization);
           if (exists) {
             hadFailure = true;
             updateItem(item.id, {
@@ -1268,6 +1285,7 @@ export default function App() {
           file: item.file,
           targetUrl,
           authorization,
+          overwrite: overwriteExisting,
           onProgress: (progress) => {
             updateItem(item.id, {
               status: "uploading",
@@ -1318,17 +1336,16 @@ export default function App() {
         setPath(refreshed.path);
       } catch (error) {
         hadFailure = true;
-        setUploadMessage(
+        nextUploadMessage =
           error instanceof Error
             ? error.message
-            : "The page could not be refreshed after uploading.",
-        );
+            : "The page could not be refreshed after uploading.";
       }
     }
 
-  if (!uploadMessage) {
-      setUploadMessage(formatUploadMessage(uploadedCount, hadFailure));
-    }
+    setUploadMessage(
+      nextUploadMessage ?? formatUploadMessage(uploadedCount, hadFailure),
+    );
 
     setUploading(false);
   };
@@ -1348,6 +1365,13 @@ export default function App() {
 
   const handleRename = async (entry: Entry, newName: string) => {
     if (!authorization) return;
+
+    const validationMessage = getInvalidEntryNameMessage(newName);
+    if (validationMessage) {
+      setRenameStatus("error");
+      setRenameError(validationMessage);
+      return;
+    }
 
     setRenameStatus("loading");
     setRenameError(null);
@@ -1516,11 +1540,18 @@ export default function App() {
   const handleCreateFolder = async (name: string) => {
     if (!authorization) return;
 
+    const validationMessage = getInvalidEntryNameMessage(name);
+    if (validationMessage) {
+      setCreateFolderStatus("error");
+      setCreateFolderError(validationMessage);
+      return;
+    }
+
     setCreateFolderStatus("loading");
     setCreateFolderError(null);
 
     try {
-      const targetUrl = buildResourceUrl(name.endsWith("/") ? name : name + "/");
+      const targetUrl = getEntryDestinationUrl(name, "directory");
       await createDirectory(targetUrl, authorization);
       markWriteSuccess();
 
@@ -1546,6 +1577,13 @@ export default function App() {
 
   const handleCreateFile = async (name: string) => {
     if (!authorization) return;
+
+    const validationMessage = getInvalidEntryNameMessage(name);
+    if (validationMessage) {
+      setCreateFileStatus("error");
+      setCreateFileError(validationMessage);
+      return;
+    }
 
     setCreateFileStatus("loading");
     setCreateFileError(null);

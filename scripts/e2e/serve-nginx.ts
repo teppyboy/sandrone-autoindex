@@ -1,15 +1,10 @@
 import { exec } from "child_process";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { promisify } from "util";
 import { prepareSite } from "./prepare-site";
 
 const execAsync = promisify(exec);
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, "../..");
-const tempRoot = path.resolve(projectRoot, ".e2e-temp");
 
 const PORT = 38123;
 const CONTAINER_NAME = "sandrone-autoindex-e2e";
@@ -32,13 +27,13 @@ async function checkDocker(): Promise<boolean> {
 async function stopExistingContainer(): Promise<void> {
   try {
     const { stdout } = await execAsync(
-      `docker ps -aq -f name=${CONTAINER_NAME}`
+      `docker ps -aq -f "name=^/${CONTAINER_NAME}$"`
     );
     if (stdout.trim()) {
       console.log(`Stopping existing container ${CONTAINER_NAME}...`);
       await execAsync(`docker rm -f ${CONTAINER_NAME}`);
     }
-  } catch (error) {
+  } catch {
     // Ignore errors if container doesn't exist
   }
 }
@@ -64,7 +59,6 @@ async function startNginxContainer(
   const nginxConfigTemplate = path.join(tempRoot, "nginx.conf");
   const nginxConfig = path.join(tempRoot, "nginx-generated.conf");
   const htpasswd = path.join(tempRoot, "htpasswd");
-  const autoindexPath = path.join(siteRoot, "_autoindex");
 
   // Generate nginx config with placeholders replaced
   replaceConfigPlaceholders(nginxConfigTemplate, nginxConfig, {
@@ -118,7 +112,7 @@ async function waitForNginx(port: number, maxAttempts = 30): Promise<void> {
           break;
         }
       }
-    } catch (error) {
+    } catch {
       // Server not ready yet
     }
 
@@ -160,7 +154,7 @@ async function waitForNginx(port: number, maxAttempts = 30): Promise<void> {
   const allow = optionsResponse.headers.get("Allow");
   const dav = optionsResponse.headers.get("DAV");
 
-  if (!allow?.includes("PUT")) {
+  if (!allow?.includes("PUT") && !dav) {
     console.warn(
       "⚠ Warning: PUT not advertised in Allow header, WebDAV UI may not appear"
     );

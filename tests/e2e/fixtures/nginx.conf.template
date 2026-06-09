@@ -34,20 +34,23 @@ http {
             limit_except GET HEAD {
                 deny all;
             }
-            alias {{AUTOINDEX_PATH}}/before.html;
+            root {{SITE_ROOT}};
+            try_files /__autoindex_auth_check_never_exists__ =204;
         }
         
         # Serve autoindex theme assets
         location /_autoindex/ {
             alias {{AUTOINDEX_PATH}}/;
-            add_header Cache-Control "public, max-age=3600";
+            autoindex off;
+            dav_methods off;
+            add_header Cache-Control "no-cache";
         }
         
         # Main directory listing with WebDAV support
         location / {
             root {{SITE_ROOT}};
 
-            add_header Allow "GET, HEAD, OPTIONS, PUT, DELETE, MKCOL, COPY, MOVE" always;
+            add_header Allow "GET, HEAD, OPTIONS, PUT, DELETE, MKCOL, MOVE" always;
             add_header DAV "1, 2" always;
             add_header MS-Author-Via "DAV" always;
 
@@ -56,10 +59,9 @@ http {
             }
             
             # WebDAV methods
-            dav_methods PUT DELETE MKCOL COPY MOVE;
-            # dav_ext_methods PROPFIND OPTIONS;  # Requires nginx compiled with http_dav_ext_module
-            create_full_put_path on;
-            dav_access user:rw group:rw all:r;
+            dav_methods PUT DELETE MKCOL MOVE;
+            create_full_put_path off;
+            dav_access user:rw group:r all:r;
             
             # Autoindex configuration
             autoindex on;
@@ -70,16 +72,12 @@ http {
             
             # Add viewport meta tag
             sub_filter '<head>' '<head><meta name="viewport" content="width=device-width, initial-scale=1.0">';
-            sub_filter_once off;
+            sub_filter_once on;
             
-            # Auth for write operations
-            auth_basic "Sandrone Test";
-            auth_basic_user_file {{HTPASSWD_PATH}};
-            satisfy any;
-            
-            # Allow anonymous read access
-            limit_except PUT DELETE MKCOL COPY MOVE PATCH {
-                allow all;
+            # Anonymous reads; auth required for writes.
+            limit_except GET HEAD OPTIONS {
+                auth_basic "Sandrone Test";
+                auth_basic_user_file {{HTPASSWD_PATH}};
             }
         }
     }

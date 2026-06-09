@@ -5,14 +5,21 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import fs from 'fs'
 
+const autoindexBase = '/_autoindex/'
+
 // Post-build plugin: writes dist/before.html and dist/after.html
 function autoindexSnippets(): Plugin {
+  let base = autoindexBase
+  let outDir = 'dist'
+
   return {
     name: 'autoindex-snippets',
     apply: 'build',
+    configResolved(config) {
+      base = config.base
+      outDir = path.resolve(config.root, config.build.outDir)
+    },
     closeBundle() {
-      const base = '/_autoindex/'
-
       // Inline theme-init script: reads localStorage before React mounts to
       // avoid a flash of the wrong theme or palette. Defaults to dark if no
       // preference saved. Also restores palette class (palette-NAME) on <html>.
@@ -29,16 +36,16 @@ body:has(#autoindex-root) > pre { display: none !important; }
 `
       const after = `<script type="module" src="${base}assets/index.js"></script>
 `
-      fs.writeFileSync('dist/before.html', before)
-      fs.writeFileSync('dist/after.html', after)
-      console.log('  wrote dist/before.html and dist/after.html')
+      fs.writeFileSync(path.join(outDir, 'before.html'), before)
+      fs.writeFileSync(path.join(outDir, 'after.html'), after)
+      console.log(`  wrote ${path.relative(process.cwd(), outDir)}/before.html and after.html`)
     },
   }
 }
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/_autoindex/',
+  base: autoindexBase,
   plugins: [
     tailwindcss(),
     react(),

@@ -336,12 +336,14 @@ body:has(#autoindex-root) > html {
   transition: max-width 150ms ease, opacity 150ms ease;
 }
 .entry-row:hover .entry-checkbox,
+.entry-row:focus-within .entry-checkbox,
 .entry-row.entry-selected .entry-checkbox {
   max-width: 1.5rem;
   opacity: 1;
   border-color: oklch(0.55 0 0);
 }
 .dark .entry-row:hover .entry-checkbox,
+.dark .entry-row:focus-within .entry-checkbox,
 .dark .entry-row.entry-selected .entry-checkbox {
   border-color: oklch(0.75 0 0);
 }
@@ -365,12 +367,14 @@ body:has(#autoindex-root) > html {
   transition: max-width 150ms ease, opacity 150ms ease;
 }
 .entry-card:hover .entry-checkbox,
+.entry-card:focus-within .entry-checkbox,
 .entry-card.entry-selected .entry-checkbox {
   max-width: 1.5rem;
   opacity: 1;
   border-color: oklch(0.55 0 0);
 }
 .dark .entry-card:hover .entry-checkbox,
+.dark .entry-card:focus-within .entry-checkbox,
 .dark .entry-card.entry-selected .entry-checkbox {
   border-color: oklch(0.75 0 0);
 }

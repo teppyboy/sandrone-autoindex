@@ -100,6 +100,15 @@ export async function detectWebDavServerSupport(): Promise<WebDavServerSupportRe
     };
   }
 
+  if (optionsResponse?.status === 401) {
+    return {
+      state: "supported",
+      allow: optionsResponse.headers.get("Allow"),
+      dav: optionsResponse.headers.get("DAV"),
+      authorVia: optionsResponse.headers.get("MS-Author-Via"),
+    };
+  }
+
   if (optionsResponse?.ok) {
     return {
       state: "unsupported",
@@ -115,6 +124,15 @@ export async function detectWebDavServerSupport(): Promise<WebDavServerSupportRe
   }).catch(() => null);
 
   if (headResponse?.ok && responseSignalsWebDavSupport(headResponse)) {
+    return {
+      state: "supported",
+      allow: headResponse.headers.get("Allow"),
+      dav: headResponse.headers.get("DAV"),
+      authorVia: headResponse.headers.get("MS-Author-Via"),
+    };
+  }
+
+  if (headResponse?.status === 401) {
     return {
       state: "supported",
       allow: headResponse.headers.get("Allow"),
@@ -338,9 +356,13 @@ export async function fetchDirectoryListing(
   return parsed.entries;
 }
 
-export async function checkResourceExists(targetUrl: string): Promise<boolean> {
+export async function checkResourceExists(
+  targetUrl: string,
+  authorization?: string,
+): Promise<boolean> {
   const response = await fetch(targetUrl, {
     method: "HEAD",
+    headers: authorization ? { Authorization: authorization } : undefined,
     cache: "no-store",
   });
 
@@ -357,6 +379,7 @@ interface UploadFileOptions {
   file: File;
   targetUrl: string;
   authorization: string;
+  overwrite?: boolean;
   onProgress?: (progress: number) => void;
 }
 
@@ -364,12 +387,16 @@ export function uploadFile({
   file,
   targetUrl,
   authorization,
+  overwrite = false,
   onProgress,
 }: UploadFileOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", targetUrl);
     request.setRequestHeader("Authorization", authorization);
+    if (!overwrite) {
+      request.setRequestHeader("If-None-Match", "*");
+    }
 
     if (file.type) {
       request.setRequestHeader("Content-Type", file.type);
@@ -425,7 +452,7 @@ export async function moveResource(
   sourceUrl: string,
   destinationUrl: string,
   authorization: string,
-  overwrite: boolean = true,
+  overwrite: boolean = false,
 ): Promise<void> {
   const response = await fetch(sourceUrl, {
     method: "MOVE",
@@ -510,6 +537,7 @@ export async function createEmptyFile(
     headers: {
       Authorization: authorization,
       "Content-Type": "text/plain",
+      "If-None-Match": "*",
     },
     body: "",
     cache: "no-store",
