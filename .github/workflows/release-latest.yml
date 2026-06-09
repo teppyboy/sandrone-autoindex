@@ -66,6 +66,7 @@ jobs:
           - \`_autoindex/before.html\`
           - \`_autoindex/after.html\`
           - \`_autoindex/assets/*\`
+          - Large reusable assets are loaded from the GitHub Pages demo by default.
           EOF
 
       - name: Upsert latest tag

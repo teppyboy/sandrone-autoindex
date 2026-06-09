@@ -241,7 +241,10 @@ body:has(#autoindex-root) > html {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background-image: url('/_autoindex/bg/140384272_p0.jpg');
+  background-image: var(
+    --sandrone-bg-image,
+    url('https://sandrone-autoindex.tretrauit.me/demo/assets/bg/140384272_p0.jpg')
+  );
   background-size: cover;
   background-position: center;
   filter: brightness(var(--bg-brightness, 0.70)) blur(var(--bg-blur, 0px));

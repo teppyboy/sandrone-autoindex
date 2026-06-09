@@ -34,6 +34,28 @@ location /_autoindex/ {
 ```
 In this config, the `_autoindex` folder is inside `data/webdav/` folder for your reference. 
 
+### Reusable remote assets
+
+Large decorative assets are hosted by the project demo instead of bundled in the
+release archive. The Sandrone background defaults to:
+
+```text
+https://sandrone-autoindex.tretrauit.me/demo/assets/bg/140384272_p0.jpg
+```
+
+This keeps client installs small. To self-host the image, define this CSS
+variable before loading `assets/index.css`:
+
+```html
+<style>
+  :root {
+    --sandrone-bg-image: url('/_autoindex/assets/bg/140384272_p0.jpg');
+  }
+</style>
+```
+
+The live demo is published at `https://sandrone-autoindex.tretrauit.me/demo/`.
+
 ### Basic WebDAV client
 
 This UI can also act as a WebDAV client, which supports basic file management directly in the web.

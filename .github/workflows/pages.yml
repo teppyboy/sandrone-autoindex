@@ -1,0 +1,88 @@
+name: Pages
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build app
+        run: bun run build
+
+      - name: Assemble Pages site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pages-out/_autoindex pages-out/demo/assets/bg
+          cp -R dist/. pages-out/_autoindex/
+          cp pages/assets/bg/140384272_p0.jpg pages-out/demo/assets/bg/140384272_p0.jpg
+          cat > pages-out/demo/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <title>Sandrone AutoIndex Demo</title>
+            </head>
+            <body>
+              $(cat dist/before.html)
+              <h1>Index of /demo/</h1>
+              <hr />
+              <pre>
+          <a href="../">../</a>                                                   -
+          <a href="photos/">photos/</a>                                  15-Jan-2025 10:30        -
+          <a href="projects/">projects/</a>                                20-Feb-2025 14:22        -
+          <a href="README.md">README.md</a>                                 01-Jan-2025 08:00      4096
+          <a href="report-2025.pdf">report-2025.pdf</a>                           28-Feb-2025 16:00   2097152
+          <a href="dataset.csv">dataset.csv</a>                               10-Mar-2025 12:10    524288
+          <a href="photo.jpg">photo.jpg</a>                                 05-Feb-2025 09:30   3145728
+              </pre>
+              <hr />
+              $(cat dist/after.html)
+            </body>
+          </html>
+          EOF
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-out
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
