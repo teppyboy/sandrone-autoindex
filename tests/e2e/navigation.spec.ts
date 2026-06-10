@@ -99,7 +99,7 @@ test.describe("Navigation Tests", () => {
   test("search clears when navigating to another directory", async ({ page }) => {
     await page.goto("/projects/");
 
-    const searchInput = page.locator('input[placeholder*="Filter"]');
+    const searchInput = page.getByRole("searchbox", { name: "Search files" });
     await searchInput.fill("alpha");
 
     await expect(page.getByRole("link", { name: "alpha" })).toBeVisible();

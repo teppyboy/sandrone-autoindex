@@ -196,6 +196,52 @@ function getInvalidEntryNameMessage(name: string): string | null {
   return null;
 }
 
+type DragSelectionBox = {
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  additive: boolean;
+};
+
+type ClientRectShape = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+function getDragSelectionRect(box: DragSelectionBox): ClientRectShape & {
+  width: number;
+  height: number;
+} {
+  const left = Math.min(box.startX, box.currentX);
+  const top = Math.min(box.startY, box.currentY);
+  const right = Math.max(box.startX, box.currentX);
+  const bottom = Math.max(box.startY, box.currentY);
+
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+function getDragSelectionStyle(box: DragSelectionBox) {
+  const { left, top, width, height } = getDragSelectionRect(box);
+  return { left, top, width, height };
+}
+
+function rectsIntersect(a: ClientRectShape, b: ClientRectShape): boolean {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
+function isInteractiveSelectionTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+
+  return Boolean(
+    target.closest(
+      'a, button, input, textarea, select, [role="button"], [role="menuitem"], [data-selection-ignore="true"], [data-entry-href]',
+    ),
+  );
+}
+
 interface SortButtonProps {
   label: string;
   sortKey: SortKey;
@@ -318,6 +364,7 @@ function FileRow({ entry, isMobile, showSize = true, isAuthenticated, onRename, 
         isDropTarget && "drag-over-directory",
         selected && "entry-selected",
       )}
+      data-entry-href={entry.href}
       draggable={isAuthenticated}
       onDragStart={handleRowDragStart}
       onDragEnd={handleRowDragEnd}
@@ -488,6 +535,7 @@ function FileCard({ entry, isMobile, isAuthenticated, onRename, onMove, onDelete
         isDropTarget && "drag-over-directory",
         selected && "entry-selected",
       )}
+      data-entry-href={entry.href}
       draggable={isAuthenticated}
       onDragStart={handleCardDragStart}
       onDragEnd={handleCardDragEnd}
@@ -857,6 +905,9 @@ export default function App() {
 
   const [selectedHrefs, setSelectedHrefs] = useState<Set<string>>(new Set());
   const [selectionPath, setSelectionPath] = useState(path || "/");
+  const [dragSelectionBox, setDragSelectionBox] = useState<DragSelectionBox | null>(null);
+  const selectionAreaRef = useRef<HTMLElement | null>(null);
+  const dragSelectionBaseRef = useRef<Set<string>>(new Set());
   const [batchMoveTarget, setBatchMoveTarget] = useState<Entry | null>(null);
   const [batchMoveStatus, setBatchMoveStatus] = useState<FileOperationStatus>("idle");
   const [batchMoveError, setBatchMoveError] = useState<string | null>(null);
@@ -1071,6 +1122,74 @@ export default function App() {
     setSelectedHrefs(new Set());
   };
 
+  const updateDragSelection = (box: DragSelectionBox) => {
+    const area = selectionAreaRef.current;
+    if (!area) return;
+
+    const selectionRect = getDragSelectionRect(box);
+    const next = box.additive ? new Set(dragSelectionBaseRef.current) : new Set<string>();
+
+    area.querySelectorAll<HTMLElement>("[data-entry-href]").forEach((element) => {
+      const href = element.dataset.entryHref;
+      if (!href) return;
+      if (rectsIntersect(selectionRect, element.getBoundingClientRect())) {
+        next.add(href);
+      }
+    });
+
+    setSelectedHrefs(next);
+    setSelectionPath(path || "/");
+  };
+
+  const handleSelectionPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (!isAuthenticated || isMobile || event.button !== 0) return;
+    if (isInteractiveSelectionTarget(event.target)) return;
+
+    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+    const box: DragSelectionBox = {
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      additive,
+    };
+
+    dragSelectionBaseRef.current = additive ? new Set(effectiveHrefs) : new Set();
+    setDragSelectionBox(box);
+    updateDragSelection(box);
+    event.preventDefault();
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail if the pointer is already released.
+    }
+  };
+
+  const handleSelectionPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    if (!dragSelectionBox) return;
+
+    const next = {
+      ...dragSelectionBox,
+      currentX: event.clientX,
+      currentY: event.clientY,
+    };
+    setDragSelectionBox(next);
+    updateDragSelection(next);
+    event.preventDefault();
+  };
+
+  const handleSelectionPointerEnd = (event: React.PointerEvent<HTMLElement>) => {
+    if (!dragSelectionBox) return;
+
+    setDragSelectionBox(null);
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore release errors for cancelled pointers.
+    }
+  };
+
   const dirCount = useMemo(
     () => visibleEntries.filter((entry) => entry.type === "directory").length,
     [visibleEntries],
@@ -1118,6 +1237,7 @@ export default function App() {
     <div className={cn("relative", className)}>
       <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
+        type="search"
         aria-label="Search files"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
@@ -1730,6 +1850,12 @@ export default function App() {
         onDrop={handleGlobalDrop}
       >
         <DropOverlay visible={osDragCounter > 0} />
+        {dragSelectionBox && (
+          <div
+            className="drag-selection-box"
+            style={getDragSelectionStyle(dragSelectionBox)}
+          />
+        )}
         <header className="sticky top-0 z-10 border-b border-border/70 bg-background/95 shadow-sm backdrop-blur">
           {isMobile ? (
             <>
@@ -1738,8 +1864,8 @@ export default function App() {
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <FolderOpen className="size-4.5" strokeWidth={1.7} />
                   </span>
-                  <span className="truncate text-sm font-semibold tracking-tight text-foreground">
-                    Sandrone Drive
+                  <span className="font-brand truncate text-sm font-semibold tracking-tight text-foreground">
+                    Sandrone
                   </span>
                 </div>
 
@@ -1776,8 +1902,8 @@ export default function App() {
                 <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <FolderOpen className="size-5" strokeWidth={1.7} />
                 </span>
-                <span className="text-base font-semibold tracking-tight text-foreground">
-                  Sandrone Drive
+                <span className="font-brand text-base font-semibold tracking-tight text-foreground">
+                  Sandrone
                 </span>
               </div>
 
@@ -1905,7 +2031,14 @@ export default function App() {
           </div>
         )}
 
-        <main className={cn("autoindex-content mx-auto w-full max-w-7xl flex-1 px-4 py-5", navigating && "navigating")}>
+        <main
+          ref={selectionAreaRef}
+          className={cn("autoindex-content mx-auto w-full max-w-7xl flex-1 px-4 py-5", navigating && "navigating")}
+          onPointerDown={handleSelectionPointerDown}
+          onPointerMove={handleSelectionPointerMove}
+          onPointerUp={handleSelectionPointerEnd}
+          onPointerCancel={handleSelectionPointerEnd}
+        >
           {visibleNotice && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground shadow-sm">
               <CircleAlert className="mt-0.5 size-4 shrink-0" />
@@ -2054,7 +2187,7 @@ export default function App() {
           )}
 
           {view === "list" ? (
-            <div className="flex flex-col gap-1 rounded-2xl border border-border/70 bg-background p-1.5 shadow-sm">
+            <div className="entry-list-surface flex flex-col gap-1 rounded-2xl border border-border/70 bg-background p-1.5 shadow-sm">
               {sorted.map((entry) => (
                 <FileRow key={entry.href} entry={entry} isMobile={isMobile} isAuthenticated={isAuthenticated} onRename={(e) => setRenameTarget(e)} onMove={(e) => setMoveTarget(e)} onDelete={(e) => setDeleteTarget(e)} onDragStart={setDraggedEntry} onDragEnd={() => setDraggedEntry(null)} onMoveToDirectory={handleMoveToDirectory} draggedEntry={draggedEntry} selected={effectiveHrefs.has(entry.href)} onToggleSelect={toggleSelect} onNavigate={navigateToDirectory} />
               ))}

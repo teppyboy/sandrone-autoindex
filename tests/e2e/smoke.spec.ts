@@ -65,7 +65,7 @@ test.describe("Smoke Tests", () => {
     await gotoRoot(page);
 
     // Desktop search field
-    const searchInput = page.locator('input[placeholder*="Filter"]');
+    const searchInput = page.getByRole("searchbox", { name: "Search files" });
     await expect(searchInput).toBeVisible();
   });
 

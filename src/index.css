@@ -3,6 +3,20 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+@font-face {
+  font-family: "HYWenHei";
+  src:
+    local("HYWenHei"),
+    local("HYWenHei-85W"),
+    url("https://sandrone-autoindex.tretrauit.me/demo/assets/fonts/HYWenHei.woff2") format("woff2");
+  font-display: swap;
+}
+
+.font-brand {
+  font-family: "HYWenHei", "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+
 /* ── Light theme (default) ───────────────────────────────────────────────── */
 :root {
   color-scheme: light;
@@ -275,6 +289,22 @@ body:has(#autoindex-root) > html {
   border-color: var(--glass-border);
 }
 
+.palette-sandrone .entry-list-surface,
+.palette-sandrone .entry-card {
+  background: color-mix(in oklch, var(--background) 52%, transparent) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: 0 18px 45px color-mix(in oklch, black 18%, transparent);
+  backdrop-filter: blur(10px) saturate(135%);
+  -webkit-backdrop-filter: blur(10px) saturate(135%);
+}
+
+.palette-sandrone .entry-row:hover,
+.palette-sandrone .entry-row:focus-within,
+.palette-sandrone .entry-card:hover,
+.palette-sandrone .entry-card:focus-within {
+  background: color-mix(in oklch, var(--primary) 12%, transparent) !important;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    DRAG AND DROP
    Styles for OS file drop overlay and internal entry drag-and-drop.
@@ -313,6 +343,23 @@ body:has(#autoindex-root) > html {
   background: color-mix(in oklch, var(--primary) 12%, transparent) !important;
   outline: 2px dashed var(--ring) !important;
   outline-offset: -2px;
+}
+
+.drag-selection-box {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  border: 1px solid color-mix(in oklch, var(--primary) 70%, white 10%);
+  border-radius: 0.35rem;
+  background: color-mix(in oklch, var(--primary) 18%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--background) 35%, transparent);
+}
+
+.palette-sandrone .drag-selection-box {
+  border-color: color-mix(in oklch, var(--primary) 80%, white 10%);
+  background: color-mix(in oklch, var(--primary) 24%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 /* Drag handle cursor on draggable rows */
